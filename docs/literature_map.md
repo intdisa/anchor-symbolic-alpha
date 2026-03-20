@@ -5,7 +5,7 @@ bibliography. The goal is to keep one place for:
 
 - the user's original paper set
 - the later top-journal / top-conference references
-- how each paper should be used in the Route B paper
+- how each paper should be used in the current paper
 
 Before final submission, confirm page numbers, authors, and BibTeX against the
 publisher pages or PDF metadata.
@@ -183,7 +183,7 @@ publisher pages or PDF metadata.
 
 ### Core narrative
 
-The revised Route B paper should be positioned around:
+The revised paper should be positioned around:
 
 - anchor-agent symbolic factor discovery
 - validation-backed selection

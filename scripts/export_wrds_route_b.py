@@ -18,7 +18,7 @@ WRDS_REQUIRED_DATASETS = (
     "compustat_annual",
 )
 
-DEFAULT_OUTPUT_ROOT = Path("data/raw/route_b")
+DEFAULT_OUTPUT_ROOT = Path("data/raw/us_equities")
 
 WRDS_SPECS: dict[str, dict[str, Any]] = {
     "crsp_daily": {
@@ -80,8 +80,8 @@ WRDS_SPECS: dict[str, dict[str, Any]] = {
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export route-B WRDS datasets for U.S. equities cross-sectional discovery.")
-    parser.add_argument("--config", type=Path, default=Path("configs/route_b_data.yaml"))
+    parser = argparse.ArgumentParser(description="Export WRDS datasets for the U.S. equities cross-sectional mainline.")
+    parser.add_argument("--config", type=Path, default=Path("configs/us_equities_data.yaml"))
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--datasets", type=str, default=",".join(WRDS_REQUIRED_DATASETS))

@@ -13,14 +13,14 @@ if str(PROJECT_ROOT) not in sys.path:
 from knowledge_guided_symbolic_alpha.dataio.us_equities_panel import build_us_equities_panel
 
 
-DEFAULT_PANEL_OUTPUT = Path("data/processed/route_b/us_equities_panel.parquet")
-DEFAULT_SUMMARY_OUTPUT = Path("outputs/reports/route_b_panel_summary.json")
+DEFAULT_PANEL_OUTPUT = Path("data/processed/us_equities/us_equities_panel.parquet")
+DEFAULT_SUMMARY_OUTPUT = Path("outputs/reports/us_equities_panel_summary.json")
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build the normalized Route B cross-sectional panel.")
-    parser.add_argument("--raw-root", default="data/raw/route_b")
-    parser.add_argument("--config-path", default="configs/route_b_panel.yaml")
+    parser = argparse.ArgumentParser(description="Build the normalized U.S. equities cross-sectional panel.")
+    parser.add_argument("--raw-root", default="data/raw/us_equities")
+    parser.add_argument("--config-path", default="configs/us_equities_panel.yaml")
     parser.add_argument("--panel-output", default=DEFAULT_PANEL_OUTPUT.as_posix())
     parser.add_argument("--summary-output", default=DEFAULT_SUMMARY_OUTPUT.as_posix())
     parser.add_argument("--skip-save-panel", action="store_true")

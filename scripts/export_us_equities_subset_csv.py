@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
 from __future__ import annotations
 
-from run_anchor_train import main
+from export_route_b_subset_csv import main
 
 
 if __name__ == "__main__":

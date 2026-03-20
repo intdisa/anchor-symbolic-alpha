@@ -1,7 +1,10 @@
-# Route B Experiment Log
+# Experiment Log
 
 This document records the experiment files that currently matter for paper writing.
 It is a compact index, not a full report.
+
+Note: many historical output directories still contain `route_b` in the path.
+Those names are legacy artifacts from the exploratory phase.
 
 ## Main result files
 
@@ -98,4 +101,4 @@ It is a compact index, not a full report.
   - `short_horizon_flow`
 - current empirical status:
   - challengers have not yet shown stable marginal gain over the anchor baseline
-  - default Route B runs should therefore be interpreted as anchor-only unless challengers are explicitly requested
+  - default mainline runs should therefore be interpreted as anchor-only unless challengers are explicitly requested

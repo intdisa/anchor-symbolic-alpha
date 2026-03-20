@@ -34,6 +34,10 @@ DEFAULT_BACKTEST_CONFIG = Path("configs/backtest.yaml")
 DEFAULT_EXPERIMENT_CONFIG = Path("configs/experiments/gold.yaml")
 DEFAULT_OUTPUT_ROOT = Path("outputs")
 
+DATASET_ALIASES = {
+    "us_equities": "route_b",
+}
+
 TARGET_COLUMNS = {
     "gold": "TARGET_GOLD_FWD_RET_1",
     "crude_oil": "TARGET_CRUDE_OIL_FWD_RET_1",
@@ -59,20 +63,35 @@ def load_experiment_name(path: str | Path) -> str:
     return str(payload["experiment"]["dataset"])
 
 
+def canonical_dataset_name(dataset_name: str) -> str:
+    return DATASET_ALIASES.get(dataset_name, dataset_name)
+
+
+def resolve_mainline_path(path: str | Path) -> Path:
+    candidate = Path(path)
+    if candidate.exists():
+        return candidate
+    legacy = Path(str(candidate).replace("/us_equities/", "/route_b/"))
+    return legacy if legacy.exists() else candidate
+
+
 def load_dataset_bundle(data_config: str | Path = DEFAULT_DATA_CONFIG):
     payload = load_yaml(data_config)
-    if "route_b_subset" in payload:
-        return load_processed_route_b_splits(payload["route_b_subset"]["split_root"])
+    subset_config = payload.get("us_equities_subset") or payload.get("route_b_subset")
+    if subset_config is not None:
+        return load_processed_route_b_splits(resolve_mainline_path(subset_config["split_root"]))
     return build_gold_dataset(config_path=data_config)
 
 
 def dataset_columns(dataset_name: str) -> tuple[str, str]:
+    dataset_name = canonical_dataset_name(dataset_name)
     if dataset_name not in TARGET_COLUMNS:
         raise ValueError(f"Unsupported dataset {dataset_name!r}.")
     return TARGET_COLUMNS[dataset_name], RETURN_COLUMNS[dataset_name]
 
 
 def dataset_prefix(dataset_name: str) -> str:
+    dataset_name = canonical_dataset_name(dataset_name)
     mapping = {
         "gold": "GOLD",
         "crude_oil": "CRUDE_OIL",
@@ -84,6 +103,7 @@ def dataset_prefix(dataset_name: str) -> str:
 
 
 def feature_partitions(dataset_name: str) -> tuple[frozenset[str], frozenset[str]]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name) + "_"
     target_features = frozenset(
         name
@@ -95,6 +115,7 @@ def feature_partitions(dataset_name: str) -> tuple[frozenset[str], frozenset[str
 
 
 def three_way_feature_partitions(dataset_name: str) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     target_price_features = frozenset(
         {
@@ -124,6 +145,7 @@ def three_way_feature_partitions(dataset_name: str) -> tuple[frozenset[str], fro
 def competitive_feature_partitions(
     dataset_name: str,
 ) -> tuple[frozenset[str], frozenset[str], frozenset[str], frozenset[str]]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     target_price_features = frozenset(
         {
@@ -161,6 +183,7 @@ def competitive_feature_partitions(
 
 
 def skill_family_feature_partitions(dataset_name: str) -> dict[str, frozenset[str]]:
+    dataset_name = canonical_dataset_name(dataset_name)
     if dataset_name == "route_b":
         return {
             "quality_solvency": frozenset(
@@ -264,6 +287,7 @@ def skill_family_operator_whitelists() -> dict[str, frozenset[str]]:
 
 
 def target_feature_biases(dataset_name: str) -> dict[str, float]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     biases = {
         f"{prefix}_GAP_RET": 0.20,
@@ -282,6 +306,7 @@ def target_feature_biases(dataset_name: str) -> dict[str, float]:
 
 
 def target_price_biases(dataset_name: str) -> dict[str, float]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     return {
         f"{prefix}_GAP_RET": 0.24,
@@ -298,6 +323,7 @@ def target_price_biases(dataset_name: str) -> dict[str, float]:
 
 
 def target_flow_biases(dataset_name: str) -> dict[str, float]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     return {
         f"{prefix}_REALIZED_VOL_5": 0.28,
@@ -320,6 +346,7 @@ def target_flow_biases(dataset_name: str) -> dict[str, float]:
 
 
 def target_flow_vol_biases(dataset_name: str) -> dict[str, float]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     return {
         f"{prefix}_REALIZED_VOL_5": 0.28,
@@ -340,6 +367,7 @@ def target_flow_vol_biases(dataset_name: str) -> dict[str, float]:
 
 
 def target_flow_gap_biases(dataset_name: str) -> dict[str, float]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     return {
         f"{prefix}_GAP_RET": 0.26,
@@ -372,6 +400,7 @@ def context_feature_biases(dataset_name: str) -> dict[str, float]:
 
 
 def target_seed_formulas(dataset_name: str) -> tuple[tuple[str, ...], ...]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     return (
         (f"{prefix}_CLOSE", "DELTA_1", "NEG"),
@@ -385,6 +414,7 @@ def target_seed_formulas(dataset_name: str) -> tuple[tuple[str, ...], ...]:
 
 
 def target_price_seed_formulas(dataset_name: str) -> tuple[tuple[str, ...], ...]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     return (
         (f"{prefix}_CLOSE", "DELTA_1", "NEG"),
@@ -396,6 +426,7 @@ def target_price_seed_formulas(dataset_name: str) -> tuple[tuple[str, ...], ...]
 
 
 def target_flow_seed_formulas(dataset_name: str) -> tuple[tuple[str, ...], ...]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     return (
         (f"{prefix}_GAP_RET", "RANK", f"{prefix}_HL_SPREAD", "CORR_5"),
@@ -412,6 +443,7 @@ def target_flow_seed_formulas(dataset_name: str) -> tuple[tuple[str, ...], ...]:
 
 
 def target_flow_vol_seed_formulas(dataset_name: str) -> tuple[tuple[str, ...], ...]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     return (
         (f"{prefix}_REALIZED_VOL_5", "TS_MEAN_5", "NEG"),
@@ -424,6 +456,7 @@ def target_flow_vol_seed_formulas(dataset_name: str) -> tuple[tuple[str, ...], .
 
 
 def target_flow_gap_seed_formulas(dataset_name: str) -> tuple[tuple[str, ...], ...]:
+    dataset_name = canonical_dataset_name(dataset_name)
     prefix = dataset_prefix(dataset_name)
     return (
         (f"{prefix}_GAP_RET", "NEG"),
@@ -436,6 +469,7 @@ def target_flow_gap_seed_formulas(dataset_name: str) -> tuple[tuple[str, ...], .
 
 
 def skill_family_biases(dataset_name: str) -> dict[str, dict[str, float]]:
+    dataset_name = canonical_dataset_name(dataset_name)
     if dataset_name == "route_b":
         return {
             "quality_solvency": {
@@ -542,6 +576,7 @@ def skill_family_biases(dataset_name: str) -> dict[str, dict[str, float]]:
 
 
 def skill_family_seed_formulas(dataset_name: str) -> dict[str, tuple[tuple[str, ...], ...]]:
+    dataset_name = canonical_dataset_name(dataset_name)
     if dataset_name == "route_b":
         return {
             "quality_solvency": (
@@ -625,6 +660,10 @@ def resolve_route_b_skill_aliases(skill_names: tuple[str, ...] | None) -> tuple[
     return tuple(dict.fromkeys(expanded))
 
 
+def resolve_us_equities_skill_aliases(skill_names: tuple[str, ...] | None) -> tuple[str, ...] | None:
+    return resolve_route_b_skill_aliases(skill_names)
+
+
 def build_curriculum(training_config: dict[str, Any]) -> FormulaCurriculum | None:
     enabled = bool(training_config.get("training", {}).get("curriculum", {}).get("enabled", True))
     return FormulaCurriculum() if enabled else None
@@ -699,6 +738,7 @@ def build_manager(
     allow_validation_backed_upgrade: bool = True,
     enforce_flow_residual_gate: bool = True,
 ) -> ManagerAgent | CompetitiveManagerAgent | HierarchicalManagerAgent:
+    dataset_name = canonical_dataset_name(dataset_name)
     base_seed = training_seed(training_config, seed_override=seed_override)
     shared_memory = ExperienceMemory(success_scale=0.0, failure_scale=0.0) if no_memory else ExperienceMemory()
     if partition_mode == "macro_micro":
@@ -1028,6 +1068,7 @@ def dataset_diagnostics(bundle) -> dict[str, Any]:
 
 
 def dataset_input_frame(split: pd.DataFrame, feature_columns: tuple[str, ...], dataset_name: str) -> pd.DataFrame:
+    dataset_name = canonical_dataset_name(dataset_name)
     if dataset_name == "route_b":
         columns = ["date", "permno", *feature_columns]
         return split.loc[:, columns].copy()

@@ -54,7 +54,7 @@ class FixedRoleManager(ManagerAgent):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run Route B ablations over anchor and challenger mechanisms.")
+    parser = argparse.ArgumentParser(description="Run mainline ablations over anchor and challenger mechanisms.")
     parser.add_argument("--episodes", type=int, default=40)
     parser.add_argument(
         "--variants",

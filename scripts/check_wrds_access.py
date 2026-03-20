@@ -81,7 +81,7 @@ def main() -> None:
         for (schema,) in schemas:
             print(f"  - {schema}")
 
-        print("\nRoute B table checks:")
+        print("\nU.S. equities table checks:")
         for table, status in check_tables(connection, REQUIRED_TABLES):
             print(f"  - {table}: {status}")
 

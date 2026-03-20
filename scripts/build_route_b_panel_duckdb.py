@@ -9,17 +9,17 @@ import duckdb
 import yaml
 
 
-DEFAULT_CONFIG_PATH = Path("configs/route_b_panel.yaml")
-DEFAULT_RAW_ROOT = Path("data/raw/route_b")
-DEFAULT_INTERIM_PATH = Path("data/interim/route_b/daily_feature_panel.parquet")
-DEFAULT_PANEL_PATH = Path("data/processed/route_b/us_equities_panel.parquet")
-DEFAULT_SPLIT_ROOT = Path("data/processed/route_b/splits")
-DEFAULT_SUMMARY_PATH = Path("outputs/reports/route_b_panel_summary.json")
-DEFAULT_TEMP_DIR = Path("/tmp/duckdb_route_b")
+DEFAULT_CONFIG_PATH = Path("configs/us_equities_panel.yaml")
+DEFAULT_RAW_ROOT = Path("data/raw/us_equities")
+DEFAULT_INTERIM_PATH = Path("data/interim/us_equities/daily_feature_panel.parquet")
+DEFAULT_PANEL_PATH = Path("data/processed/us_equities/us_equities_panel.parquet")
+DEFAULT_SPLIT_ROOT = Path("data/processed/us_equities/splits")
+DEFAULT_SUMMARY_PATH = Path("outputs/reports/us_equities_panel_summary.json")
+DEFAULT_TEMP_DIR = Path("/tmp/duckdb_us_equities")
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build Route B panel with DuckDB using bounded memory.")
+    parser = argparse.ArgumentParser(description="Build the U.S. equities panel with DuckDB using bounded memory.")
     parser.add_argument("--config-path", default=DEFAULT_CONFIG_PATH.as_posix())
     parser.add_argument("--raw-root", default=DEFAULT_RAW_ROOT.as_posix())
     parser.add_argument("--interim-path", default=DEFAULT_INTERIM_PATH.as_posix())
@@ -36,7 +36,7 @@ def parse_args() -> argparse.Namespace:
 
 def load_panel_config(path: str | Path) -> dict:
     payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    return payload["route_b_panel"]
+    return payload.get("us_equities_panel", payload["route_b_panel"])
 
 
 def sql_path(path: Path) -> str:
@@ -79,7 +79,7 @@ def main() -> None:
     comp_a = raw_root / "wrds" / "compustat_annual.csv.gz"
 
     if not args.skip_interim and (args.force_rebuild or not interim_path.exists()):
-        print("[route-b] build daily interim", flush=True)
+        print("[us-equities] build daily interim", flush=True)
         con.execute(
             f"""
             COPY (

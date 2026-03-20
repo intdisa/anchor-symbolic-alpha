@@ -1,6 +1,6 @@
-# Route B Data Checklist
+# Data Setup
 
-Route B targets a U.S. equities cross-sectional discovery setup. The recommended
+The mainline targets a U.S. equities cross-sectional discovery setup. The recommended
 base stack is:
 
 - WRDS `CRSP` daily stock data
@@ -11,7 +11,7 @@ base stack is:
 
 ## Required WRDS exports
 
-The project now ships `configs/route_b_data.yaml` and `scripts/export_wrds_route_b.py`.
+The project now ships `configs/us_equities_data.yaml` and `scripts/export_wrds_us_equities.py`.
 The minimum WRDS extracts are:
 
 - `crsp_daily`
@@ -23,7 +23,7 @@ The minimum WRDS extracts are:
 Default output layout:
 
 ```text
-data/raw/route_b/
+data/raw/us_equities/
 ├── wrds/
 │   ├── crsp_daily.parquet
 │   ├── crsp_names.parquet
@@ -45,8 +45,8 @@ environment is Python 3.13, create a separate 3.12 virtualenv for export.
 python3.12 -m venv .venv-wrds
 . .venv-wrds/bin/activate
 pip install wrds pandas pyarrow pyyaml
-python scripts/export_wrds_route_b.py --dry-run
-python scripts/export_wrds_route_b.py
+python scripts/export_wrds_us_equities.py --dry-run
+python scripts/export_wrds_us_equities.py
 ```
 
 The dry run prints the SQL it will execute so you can adjust table names if your
@@ -59,7 +59,7 @@ WRDS account exposes the CIZ 2.0 layout instead of the legacy CRSP tables.
 - FRED daily macro context:
   - `VIXCLS`, `DGS2`, `DGS10`, `DFII10`, `DTWEXBGS`
 
-These are listed in `configs/route_b_data.yaml` and are intentionally kept
+These are listed in `configs/us_equities_data.yaml` and are intentionally kept
 outside the WRDS export step.
 
 ## Point-in-time notes

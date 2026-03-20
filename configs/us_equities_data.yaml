@@ -1,0 +1,156 @@
+us_equities:
+  universe_name: us_equities_cross_section
+  output_root: data/raw/us_equities
+  start_date: "2000-01-01"
+  end_date: "2025-12-31"
+  wrds:
+    crsp_daily:
+      schema: crsp
+      table: dsf
+      date_column: date
+      columns:
+        - permno
+        - permco
+        - date
+        - ret
+        - retx
+        - dlret
+        - prc
+        - vol
+        - shrout
+        - bidlo
+        - askhi
+        - cfacpr
+        - cfacshr
+        - exchcd
+        - shrcd
+      filters:
+        - "shrcd in (10, 11)"
+        - "exchcd in (1, 2, 3)"
+      order_by:
+        - permno
+        - date
+      output_file: crsp_daily.parquet
+    crsp_names:
+      schema: crsp
+      table: dsenames
+      columns:
+        - permno
+        - ticker
+        - ncusip
+        - comnam
+        - namedt
+        - nameendt
+        - exchcd
+        - shrcd
+        - siccd
+      filters:
+        - "shrcd in (10, 11)"
+        - "exchcd in (1, 2, 3)"
+      order_by:
+        - permno
+        - namedt
+      output_file: crsp_names.parquet
+    ccm_link:
+      schema: crsp
+      table: ccmxpf_linktable
+      columns:
+        - gvkey
+        - lpermno
+        - lpermco
+        - linkdt
+        - linkenddt
+        - linktype
+        - linkprim
+      filters:
+        - "linktype in ('LC', 'LU', 'LS')"
+        - "linkprim in ('C', 'P')"
+      order_by:
+        - lpermno
+        - linkdt
+      output_file: ccm_link.parquet
+    compustat_quarterly:
+      schema: comp
+      table: fundq
+      date_column: datadate
+      columns:
+        - gvkey
+        - datadate
+        - rdq
+        - fyearq
+        - fqtr
+        - atq
+        - ltq
+        - ceqq
+        - seq
+        - saleq
+        - niq
+        - oiadpq
+        - cheq
+        - dlcq
+        - dlttq
+        - actq
+        - lctq
+        - rectq
+        - invtq
+        - cogsq
+        - xsgaq
+      filters:
+        - "indfmt = 'INDL'"
+        - "datafmt = 'STD'"
+        - "consol = 'C'"
+        - "popsrc = 'D'"
+      order_by:
+        - gvkey
+        - datadate
+      output_file: compustat_quarterly.parquet
+    compustat_annual:
+      schema: comp
+      table: funda
+      date_column: datadate
+      columns:
+        - gvkey
+        - datadate
+        - fyear
+        - at
+        - lt
+        - ceq
+        - seq
+        - sale
+        - ni
+        - oiadp
+        - capx
+        - txditc
+        - pstkrv
+        - pstkl
+        - pstk
+      filters:
+        - "indfmt = 'INDL'"
+        - "datafmt = 'STD'"
+        - "consol = 'C'"
+        - "popsrc = 'D'"
+      order_by:
+        - gvkey
+        - datadate
+      output_file: compustat_annual.parquet
+  public_sources:
+    fama_french_daily:
+      output_file: fama_french_daily.parquet
+      source: "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library/f-f_factors.html"
+      fields:
+        - mktrf
+        - smb
+        - hml
+        - rmw
+        - cma
+        - mom
+        - rf
+    fred_macro_daily:
+      output_file: fred_macro_daily.parquet
+      source: "https://fred.stlouisfed.org/docs/api/fred/fred/"
+      fields:
+        - VIXCLS
+        - DGS2
+        - DGS10
+        - DFII10
+        - DTWEXBGS

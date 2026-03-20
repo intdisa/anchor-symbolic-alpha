@@ -8,14 +8,14 @@ from pathlib import Path
 import duckdb
 
 
-DEFAULT_SOURCE_ROOT = Path("data/processed/route_b/splits")
-DEFAULT_OUTPUT_ROOT = Path("data/processed/route_b/subsets")
-DEFAULT_TEMP_DIR = Path("/tmp/duckdb_route_b")
+DEFAULT_SOURCE_ROOT = Path("data/processed/us_equities/splits")
+DEFAULT_OUTPUT_ROOT = Path("data/processed/us_equities/subsets")
+DEFAULT_TEMP_DIR = Path("/tmp/duckdb_us_equities")
 DEFAULT_SUMMARY_ROOT = Path("outputs/reports")
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build a memory-bounded Route B subset from processed split parquets.")
+    parser = argparse.ArgumentParser(description="Build a memory-bounded U.S. equities subset from processed split data.")
     parser.add_argument("--source-root", default=DEFAULT_SOURCE_ROOT.as_posix())
     parser.add_argument("--output-root", default=DEFAULT_OUTPUT_ROOT.as_posix())
     parser.add_argument("--summary-root", default=DEFAULT_SUMMARY_ROOT.as_posix())
@@ -38,7 +38,7 @@ def main() -> None:
     source_root = Path(args.source_root)
     output_root = Path(args.output_root) / args.name
     summary_root = Path(args.summary_root)
-    summary_path = summary_root / f"route_b_subset_{args.name}.json"
+    summary_path = summary_root / f"us_equities_subset_{args.name}.json"
     temp_dir = Path(args.temp_dir)
     output_root.mkdir(parents=True, exist_ok=True)
     summary_root.mkdir(parents=True, exist_ok=True)

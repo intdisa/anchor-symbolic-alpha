@@ -8,8 +8,8 @@ import duckdb
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export Route B subset split parquets to csv.gz for environments without parquet support.")
-    parser.add_argument("--subset-root", default="data/processed/route_b/subsets/liquid500_2010_2025")
+    parser = argparse.ArgumentParser(description="Export a processed U.S. equities subset to csv.gz for environments without parquet support.")
+    parser.add_argument("--subset-root", default="data/processed/us_equities/subsets/liquid500_2010_2025")
     parser.add_argument("--memory-limit", default="2GB")
     parser.add_argument("--threads", type=int, default=4)
     return parser.parse_args()

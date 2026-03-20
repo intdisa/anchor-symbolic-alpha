@@ -1,0 +1,6 @@
+us_equities_subset:
+  split_root: data/processed/us_equities/subsets/liquid500_2010_2025
+  universe_name: liquid500_2010_2025
+  max_permnos: 500
+  start_date: "2010-01-01"
+  end_date: "2025-12-31"

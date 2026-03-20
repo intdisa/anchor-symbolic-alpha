@@ -52,13 +52,13 @@ class RouteBConfig:
 def load_route_b_config(path: str | Path) -> RouteBConfig:
     config_path = Path(path)
     payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    route_b = payload.get("route_b", {})
-    output_root = Path(route_b.get("output_root", "data/raw/route_b"))
-    start_date = str(route_b["start_date"])
-    end_date = str(route_b["end_date"])
-    universe_name = str(route_b.get("universe_name", "us_equities"))
-    wrds_specs = tuple(_parse_wrds_spec(name, route_b["wrds"][name], start_date, end_date) for name in WRDS_REQUIRED_DATASETS)
-    public_series = {str(name): dict(spec) for name, spec in route_b.get("public_sources", {}).items()}
+    config = payload.get("us_equities") or payload.get("route_b", {})
+    output_root = Path(config.get("output_root", "data/raw/route_b"))
+    start_date = str(config["start_date"])
+    end_date = str(config["end_date"])
+    universe_name = str(config.get("universe_name", "us_equities"))
+    wrds_specs = tuple(_parse_wrds_spec(name, config["wrds"][name], start_date, end_date) for name in WRDS_REQUIRED_DATASETS)
+    public_series = {str(name): dict(spec) for name, spec in config.get("public_sources", {}).items()}
     return RouteBConfig(
         output_root=output_root,
         start_date=start_date,
@@ -128,3 +128,6 @@ def validate_route_b_layout(root: str | Path) -> dict[str, list[str]]:
         "missing_public": missing_public,
     }
 
+
+load_us_equities_config = load_route_b_config
+validate_us_equities_layout = validate_route_b_layout

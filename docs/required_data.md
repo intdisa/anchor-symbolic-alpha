@@ -1,8 +1,8 @@
-# Route B 所需数据清单
+# 所需数据清单
 
 ## 目标
 
-本项目的 Route B 主任务是：
+本项目当前主任务是：
 - 美国股票横截面日频因子发现
 - 时间范围建议：`2000-01-01` 到最新
 - 研究级主数据方案：`CRSP + CCM + Compustat + 公共因子/宏观`
@@ -18,9 +18,9 @@
 
 ### 已准备好
 - 公共 Fama/French 日频因子：
-  - `/Users/xieshangchen/Documents/New project/data/raw/route_b/public/fama_french_daily.csv.gz`
+  - `/Users/xieshangchen/Documents/New project/data/raw/us_equities/public/fama_french_daily.csv.gz`
 - 公共 FRED 日频宏观：
-  - `/Users/xieshangchen/Documents/New project/data/raw/route_b/public/fred_macro_daily.csv.gz`
+  - `/Users/xieshangchen/Documents/New project/data/raw/us_equities/public/fred_macro_daily.csv.gz`
 - WRDS 权限已确认可访问：
   - `comp.fundq`
   - `comp.funda`
@@ -34,7 +34,7 @@
   - 报错：`permission denied for schema crsp_a_ccm`
 
 结论：
-- 满血版 Route B 仍缺 `CRSP stock/security` 和 `CCM`
+- 满血版主线仍缺 `CRSP stock/security` 和 `CCM`
 - `Compustat` 权限本身是有的
 
 ---

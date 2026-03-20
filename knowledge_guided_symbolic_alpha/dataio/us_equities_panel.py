@@ -9,7 +9,7 @@ import pandas as pd
 import yaml
 
 
-DEFAULT_ROUTE_B_PANEL_CONFIG = Path("configs/route_b_panel.yaml")
+DEFAULT_ROUTE_B_PANEL_CONFIG = Path("configs/us_equities_panel.yaml")
 DEFAULT_ROUTE_B_RAW_ROOT = Path("data/raw/route_b")
 DEFAULT_ROUTE_B_SPLIT_ROOT = Path("data/processed/route_b/splits")
 TARGET_COLUMNS = ("TARGET_RET_1", "TARGET_XS_RET_1")
@@ -66,7 +66,7 @@ class USEquitiesPanelConfig:
 
 def load_route_b_panel_config(path: str | Path = DEFAULT_ROUTE_B_PANEL_CONFIG) -> USEquitiesPanelConfig:
     payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    config = payload["route_b_panel"]
+    config = payload.get("us_equities_panel", payload["route_b_panel"])
     return USEquitiesPanelConfig(
         raw_root=Path(config.get("raw_root", DEFAULT_ROUTE_B_RAW_ROOT)),
         splits={key: dict(value) for key, value in config["splits"].items()},
@@ -75,7 +75,7 @@ def load_route_b_panel_config(path: str | Path = DEFAULT_ROUTE_B_PANEL_CONFIG) -
 
 
 def load_route_b_raw_tables(raw_root: str | Path = DEFAULT_ROUTE_B_RAW_ROOT) -> dict[str, pd.DataFrame]:
-    root = Path(raw_root)
+    root = _resolve_legacy_root(Path(raw_root))
     return {
         "crsp_daily": pd.read_csv(
             root / "wrds" / "crsp_daily.csv.gz",
@@ -127,7 +127,7 @@ def build_us_equities_panel(
 
 
 def load_processed_route_b_splits(split_root: str | Path = DEFAULT_ROUTE_B_SPLIT_ROOT) -> USEquitiesProcessedBundle:
-    root = Path(split_root)
+    root = _resolve_legacy_root(Path(split_root))
     train = _read_processed_split(root, "train")
     valid = _read_processed_split(root, "valid")
     test = _read_processed_split(root, "test")
@@ -141,6 +141,11 @@ def load_processed_route_b_splits(split_root: str | Path = DEFAULT_ROUTE_B_SPLIT
         target_columns=TARGET_COLUMNS,
         splits=USEquitiesSplits(train=train, valid=valid, test=test),
     )
+
+
+load_us_equities_panel_config = load_route_b_panel_config
+load_us_equities_raw_tables = load_route_b_raw_tables
+load_processed_us_equities_splits = load_processed_route_b_splits
 
 
 def _read_processed_split(root: Path, split_name: str) -> pd.DataFrame:
@@ -164,6 +169,13 @@ def _read_processed_split(root: Path, split_name: str) -> pd.DataFrame:
             },
         )
     raise FileNotFoundError(f"Neither {parquet_path} nor {csv_path} exists.")
+
+
+def _resolve_legacy_root(path: Path) -> Path:
+    if path.exists():
+        return path
+    legacy = Path(str(path).replace("/us_equities/", "/route_b/"))
+    return legacy if legacy.exists() else path
 
 
 def build_panel_from_tables(tables: dict[str, pd.DataFrame], filters: dict[str, Any] | None = None) -> pd.DataFrame:

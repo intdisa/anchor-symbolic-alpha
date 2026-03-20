@@ -1,9 +1,9 @@
-# Route B Access Status
+# Data Access Status
 
 ## Confirmed accessible
 - `comp.fundq`
 - `comp.funda`
-- public benchmark/macro sources prepared via `scripts/fetch_route_b_public.py`
+- public benchmark/macro sources prepared via `scripts/fetch_public_market_data.py`
 
 ## Confirmed missing permissions
 - `crsp.dsf` -> missing access to schema `crsp_a_stock`
@@ -11,7 +11,7 @@
 - `crsp.ccmxpf_linktable` -> missing access to schema `crsp_a_ccm`
 
 ## Consequence
-The research-grade Route B pipeline based on `CRSP + CCM + Compustat` is blocked until WRDS enables:
+The research-grade mainline pipeline based on `CRSP + CCM + Compustat` is blocked until WRDS enables:
 - CRSP daily stock/security data
 - CRSP/Compustat Merged (CCM)
 

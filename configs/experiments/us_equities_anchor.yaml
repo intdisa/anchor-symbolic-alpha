@@ -1,0 +1,3 @@
+experiment:
+  dataset: us_equities
+  description: U.S. equities cross-sectional anchor-agent symbolic factor discovery.

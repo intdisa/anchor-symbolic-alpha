@@ -8,7 +8,7 @@ The current top-level paper direction has moved to:
 - challenger-based verification
 - validation-backed replacement and gating
 
-Use `docs/route_b_paper_direction.md` as the current narrative source. Keep this
+Use `docs/paper_direction.md` as the current narrative source. Keep this
 file as a record of the earlier multi-agent-heavy pivot reasoning.
 
 ## Why the current line is not enough

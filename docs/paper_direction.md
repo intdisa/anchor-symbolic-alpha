@@ -1,8 +1,8 @@
-# Route B Paper Direction
+# Paper Direction
 
 ## Current thesis
 
-Route B should no longer be presented as a "multi-agent synergy" paper.
+The project should no longer be presented as a "multi-agent synergy" paper.
 
 The empirically supported thesis is:
 
@@ -19,14 +19,14 @@ In the current codebase, this means:
   - `short_horizon_flow`
 - top-level controller:
   - `HierarchicalManagerAgent`
-- default Route B experiment mode:
+- default experiment mode:
   - anchor-only (`quality_solvency`)
 - challenger families are now opt-in verification branches, not part of the default main run
 
 Note:
 
 - older reports may still use the alias `trend_structure_only`
-- in the current split Route B setup, that alias expands to:
+- in the current split setup, that alias expands to:
   - `quality_solvency`
   - `efficiency_growth`
   - `valuation_size`

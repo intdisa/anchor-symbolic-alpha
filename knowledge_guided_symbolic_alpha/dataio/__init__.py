@@ -21,7 +21,9 @@ from .us_equities import (
     build_wrds_query,
     default_output_paths,
     load_route_b_config,
+    load_us_equities_config,
     validate_route_b_layout,
+    validate_us_equities_layout,
 )
 from .us_equities_panel import (
     DEFAULT_ROUTE_B_SPLIT_ROOT,
@@ -35,8 +37,13 @@ from .us_equities_panel import (
     load_processed_route_b_splits,
     load_route_b_panel_config,
     load_route_b_raw_tables,
+    load_processed_us_equities_splits,
+    load_us_equities_panel_config,
+    load_us_equities_raw_tables,
     split_panel_by_dates,
 )
+
+normalize_xsc_us_equities = normalize_xsc_route_b
 
 __all__ = [
     "DatasetBundle",
@@ -51,14 +58,17 @@ __all__ = [
     "DEFAULT_ROUTE_B_WRDS_ROOT",
     "RouteBNormalizationSummary",
     "normalize_xsc_route_b",
+    "normalize_xsc_us_equities",
     "WRDS_REQUIRED_DATASETS",
     "PUBLIC_REQUIRED_DATASETS",
     "WRDSExtractSpec",
     "RouteBConfig",
     "load_route_b_config",
+    "load_us_equities_config",
     "build_wrds_query",
     "default_output_paths",
     "validate_route_b_layout",
+    "validate_us_equities_layout",
     "DEFAULT_ROUTE_B_SPLIT_ROOT",
     "US_EQUITIES_TARGET_COLUMNS",
     "USEquitiesPanelBundle",
@@ -67,8 +77,11 @@ __all__ = [
     "USEquitiesSplits",
     "load_route_b_panel_config",
     "load_route_b_raw_tables",
+    "load_us_equities_panel_config",
+    "load_us_equities_raw_tables",
     "build_panel_from_tables",
     "build_us_equities_panel",
     "load_processed_route_b_splits",
+    "load_processed_us_equities_splits",
     "split_panel_by_dates",
 ]

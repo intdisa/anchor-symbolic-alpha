@@ -10,14 +10,14 @@ from pathlib import Path
 
 import pandas as pd
 
-DEFAULT_OUTPUT_ROOT = Path("data/raw/route_b/public")
+DEFAULT_OUTPUT_ROOT = Path("data/raw/us_equities/public")
 FF5_DAILY_ZIP_URL = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_5_Factors_2x3_daily_CSV.zip"
 FRED_SERIES = ("VIXCLS", "DGS2", "DGS10", "DFII10", "DTWEXBGS")
 FRED_URL_TEMPLATE = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Fetch public route-B benchmark and macro datasets.")
+    parser = argparse.ArgumentParser(description="Fetch public benchmark and macro datasets for the U.S. equities mainline.")
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--skip-fama-french", action="store_true")
     parser.add_argument("--skip-fred", action="store_true")

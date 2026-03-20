@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
 from __future__ import annotations
 
-from run_anchor_train import main
+from export_wrds_route_b import main
 
 
 if __name__ == "__main__":
