@@ -1,0 +1,6 @@
+route_b_subset:
+  split_root: data/processed/route_b/subsets/liquid1000_2010_2025
+  universe_name: liquid1000_2010_2025
+  max_permnos: 1000
+  start_date: "2010-01-01"
+  end_date: "2025-12-31"

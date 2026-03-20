@@ -1,0 +1,27 @@
+language:
+  notation: rpn
+  max_length: 15
+  min_length: 3
+  features:
+    - GOLD_CLOSE
+    - GOLD_VOLUME
+    - CPI
+    - TNX
+    - VIX
+    - DXY
+  operators:
+    unary:
+      - NEG
+      - ABS
+      - RANK
+      - DELAY_1
+      - DELTA_1
+      - TS_MEAN_5
+      - TS_STD_5
+    binary:
+      - ADD
+      - SUB
+      - MUL
+      - DIV
+    paired_rolling:
+      - CORR_5

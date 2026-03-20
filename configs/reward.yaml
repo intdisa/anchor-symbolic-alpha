@@ -1,0 +1,11 @@
+reward:
+  objective: delta_pool_score
+  bonuses:
+    - knowledge_prior
+    - novelty
+  penalties:
+    - invalid_formula
+    - complexity
+    - redundancy
+    - risk
+  clip_range: [-5.0, 5.0]

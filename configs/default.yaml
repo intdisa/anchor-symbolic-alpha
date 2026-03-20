@@ -1,0 +1,24 @@
+project:
+  name: knowledge_guided_symbolic_alpha
+  notation: rpn
+
+paths:
+  outputs_root: outputs
+
+language:
+  max_length: 15
+  min_length: 3
+  special_tokens:
+    pad: "<PAD>"
+    sos: "<SOS>"
+    eos: "<EOS>"
+  force_eos_on_empty_mask: true
+
+data:
+  split_policy: walk_forward_fixed
+
+reward:
+  objective: delta_pool_score
+
+training:
+  champion_selection: validation_pool_score

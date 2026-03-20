@@ -1,0 +1,4 @@
+experiment:
+  name: sp500
+  dataset: sp500
+  objective: walk_forward_factor_pool

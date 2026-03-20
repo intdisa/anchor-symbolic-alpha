@@ -1,0 +1,17 @@
+backtest:
+  protocol: walk_forward
+  transaction_cost_bps: 5
+  signal_threshold: 0.0
+  leverage: 1.0
+  rebalance_frequency: daily
+  normalize: true
+  clip_zscore: 5.0
+  train_size: 756
+  test_size: 252
+  step_size: 126
+  top_k: 3
+  metrics:
+    - sharpe
+    - max_drawdown
+    - annual_return
+    - turnover

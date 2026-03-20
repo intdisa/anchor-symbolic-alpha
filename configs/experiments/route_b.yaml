@@ -1,0 +1,3 @@
+experiment:
+  dataset: route_b
+  description: US equities cross-sectional factor discovery on processed Route B panel.

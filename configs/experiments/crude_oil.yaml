@@ -1,0 +1,4 @@
+experiment:
+  name: crude_oil
+  dataset: crude_oil
+  objective: walk_forward_factor_pool

@@ -1,0 +1,23 @@
+data:
+  raw_root: knowledge_guided_symbolic_alpha/data
+  target: GOLD_CLOSE
+  calendar: trading_day
+  alignment_policy: left_join_then_ffill_macro
+  files:
+    gold: GC=F(1).csv
+    crude_oil: CL=F(1).csv
+    cpi: CPIAUCSL(1).csv
+    dxy: DX-Y.NYB(1).csv
+    sp500: ^GSPC(1).csv
+    tnx: ^TNX(1).csv
+    vix: ^VIX(1).csv
+  splits:
+    train:
+      start: "2000-01-01"
+      end: "2014-12-31"
+    valid:
+      start: "2015-01-01"
+      end: "2019-12-31"
+    test:
+      start: "2020-01-01"
+      end: "2025-12-31"

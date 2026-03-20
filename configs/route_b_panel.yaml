@@ -1,0 +1,19 @@
+route_b_panel:
+  raw_root: data/raw/route_b
+  splits:
+    train:
+      start: "2000-01-01"
+      end: "2014-12-31"
+    valid:
+      start: "2015-01-01"
+      end: "2018-12-31"
+    test:
+      start: "2019-01-01"
+      end: "2025-12-31"
+  filters:
+    min_price: 5.0
+    min_dollar_volume_20: 1000000.0
+    min_history_days: 60
+    min_cross_section: 50
+    quarterly_lag_days: 45
+    annual_lag_days: 90

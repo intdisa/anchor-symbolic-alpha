@@ -1,0 +1,4 @@
+experiment:
+  name: gold
+  dataset: gold
+  objective: walk_forward_factor_pool

@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+.venv/
+.venv*/
+outputs/
+data/raw/
+data/interim/
+data/processed/
+data/features/
+data/splits/
+.venv-wrds/
+user_id.md
+xsc数据/
