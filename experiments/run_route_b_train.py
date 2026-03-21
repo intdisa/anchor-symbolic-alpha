@@ -1,7 +1,0 @@
-from __future__ import annotations
-
-from run_anchor_train import main
-
-
-if __name__ == "__main__":
-    main()

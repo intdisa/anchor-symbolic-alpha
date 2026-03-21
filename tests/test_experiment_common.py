@@ -221,7 +221,7 @@ def test_build_manager_can_build_skill_hierarchy_mode() -> None:
 
 def test_build_manager_route_b_defaults_to_anchor_mode() -> None:
     manager = build_manager(
-        load_yaml("configs/training_route_b_smoke.yaml"),
+        load_yaml("configs/training_anchor_smoke.yaml"),
         dataset_name="route_b",
         partition_mode="skill_hierarchy",
     )

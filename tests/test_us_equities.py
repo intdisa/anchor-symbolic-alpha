@@ -10,7 +10,7 @@ from knowledge_guided_symbolic_alpha.dataio.us_equities import (
 
 
 def test_load_route_b_config_includes_required_wrds_specs() -> None:
-    config = load_route_b_config("configs/route_b_data.yaml")
+    config = load_route_b_config("configs/us_equities_data.yaml")
 
     assert {spec.dataset_name for spec in config.wrds_specs} == set(WRDS_REQUIRED_DATASETS)
     assert config.start_date == "2000-01-01"
@@ -18,7 +18,7 @@ def test_load_route_b_config_includes_required_wrds_specs() -> None:
 
 
 def test_build_wrds_query_applies_date_and_filters() -> None:
-    config = load_route_b_config("configs/route_b_data.yaml")
+    config = load_route_b_config("configs/us_equities_data.yaml")
     spec = next(item for item in config.wrds_specs if item.dataset_name == "crsp_daily")
 
     sql = build_wrds_query(spec)
@@ -31,12 +31,12 @@ def test_build_wrds_query_applies_date_and_filters() -> None:
 
 
 def test_default_output_paths_match_route_b_layout() -> None:
-    config = load_route_b_config("configs/route_b_data.yaml")
+    config = load_route_b_config("configs/us_equities_data.yaml")
 
     paths = default_output_paths(config)
 
-    assert paths["crsp_daily"] == Path("data/raw/route_b/wrds/crsp_daily.parquet")
-    assert paths["fama_french_daily"] == Path("data/raw/route_b/public/fama_french_daily.parquet")
+    assert paths["crsp_daily"] == Path("data/raw/us_equities/wrds/crsp_daily.parquet")
+    assert paths["fama_french_daily"] == Path("data/raw/us_equities/public/fama_french_daily.parquet")
 
 
 def test_validate_route_b_layout_reports_missing_files(tmp_path: Path) -> None:

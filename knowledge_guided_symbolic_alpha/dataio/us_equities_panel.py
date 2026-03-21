@@ -66,7 +66,10 @@ class USEquitiesPanelConfig:
 
 def load_route_b_panel_config(path: str | Path = DEFAULT_ROUTE_B_PANEL_CONFIG) -> USEquitiesPanelConfig:
     payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    config = payload.get("us_equities_panel", payload["route_b_panel"])
+    if "us_equities_panel" in payload:
+        config = payload["us_equities_panel"]
+    else:
+        config = payload["route_b_panel"]
     return USEquitiesPanelConfig(
         raw_root=Path(config.get("raw_root", DEFAULT_ROUTE_B_RAW_ROOT)),
         splits={key: dict(value) for key, value in config["splits"].items()},

@@ -87,13 +87,8 @@ The current paper direction is documented in:
 
 - `docs/paper_direction.md`
 - `docs/experiment_log.md`
+- `docs/project_evolution_history.md`
 - `docs/literature_map.md`
 
 `docs/neurips_method_pivot.md` is kept as a historical pivot memo. It is no longer
 the current top-level narrative.
-
-## Legacy compatibility
-
-Some internal dataset keys, ignored output paths, and wrapper scripts still use
-`route_b` for backward compatibility. Public-facing docs and entry points now use
-the U.S. equities mainline naming.

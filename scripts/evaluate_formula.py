@@ -33,7 +33,9 @@ def parse_args() -> argparse.Namespace:
 
 def load_subset_config(path: str | Path) -> dict:
     payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-    return payload.get("us_equities_subset", payload["route_b_subset"])
+    if "us_equities_subset" in payload:
+        return payload["us_equities_subset"]
+    return payload["route_b_subset"]
 
 
 def load_split_frame(split_path: Path, memory_limit: str, threads: int) -> pd.DataFrame:
