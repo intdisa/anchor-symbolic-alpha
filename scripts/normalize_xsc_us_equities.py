@@ -9,7 +9,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from knowledge_guided_symbolic_alpha.dataio import (
-    DEFAULT_ROUTE_B_WRDS_ROOT,
     DEFAULT_XSC_SOURCE_ROOT,
     normalize_xsc_us_equities,
 )

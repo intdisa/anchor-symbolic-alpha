@@ -7,6 +7,7 @@ import pandas as pd
 
 from ..envs import RoleActionMask, TreeStructuredLanguageMDP
 from ..evaluation import FormulaEvaluator, preview_candidate_on_dataset
+from ..generation import FormulaCandidate
 from ..evaluation.role_profiles import normalize_role, resolve_role_profile
 from ..language import ParseError
 from ..language import RPNGrammar
@@ -34,6 +35,7 @@ class AgentProposal:
     logprob: float
     valid: bool
     terminal_error: str | None
+    candidate_records: tuple[FormulaCandidate, ...] = tuple()
 
 
 class BaseRoleAgent:
@@ -173,26 +175,29 @@ class BaseRoleAgent:
                         reason=candidate.reason,
                     )
                 )
-            if self.seed_priority_enabled:
-                bootstrap_seed = self._select_bootstrap_seed_override(candidates, pool, evaluator)
-                if bootstrap_seed is not None:
-                    return AgentProposal(
-                        role=self.role,
-                        body_tokens=bootstrap_seed.body_tokens,
-                        logprob=float(bootstrap_seed.score),
-                        valid=bootstrap_seed.valid,
-                        terminal_error=bootstrap_seed.terminal_error,
-                    )
-                novel_seed = self._select_novel_seed_override(candidates, pool, evaluator)
-                if novel_seed is not None:
-                    return AgentProposal(
-                        role=self.role,
-                        body_tokens=novel_seed.body_tokens,
-                        logprob=float(novel_seed.score),
-                        valid=novel_seed.valid,
-                        terminal_error=novel_seed.terminal_error,
-                    )
         ranked = self.proposal_mixer.rerank(candidates, evaluator=evaluator)
+        candidate_records = self._build_candidate_records(ranked)
+        if self.seed_priority_enabled:
+            bootstrap_seed = self._select_bootstrap_seed_override(candidates, pool, evaluator)
+            if bootstrap_seed is not None:
+                return AgentProposal(
+                    role=self.role,
+                    body_tokens=bootstrap_seed.body_tokens,
+                    logprob=float(bootstrap_seed.score),
+                    valid=bootstrap_seed.valid,
+                    terminal_error=bootstrap_seed.terminal_error,
+                    candidate_records=candidate_records,
+                )
+            novel_seed = self._select_novel_seed_override(candidates, pool, evaluator)
+            if novel_seed is not None:
+                return AgentProposal(
+                    role=self.role,
+                    body_tokens=novel_seed.body_tokens,
+                    logprob=float(novel_seed.score),
+                    valid=novel_seed.valid,
+                    terminal_error=novel_seed.terminal_error,
+                    candidate_records=candidate_records,
+                )
         best = self._prefer_novel_ranked_candidate(ranked, pool)
         if best is None:
             return AgentProposal(
@@ -201,6 +206,7 @@ class BaseRoleAgent:
                 logprob=sample.logprob,
                 valid=sample.valid,
                 terminal_error=sample.terminal_error,
+                candidate_records=candidate_records,
             )
         return AgentProposal(
             role=self.role,
@@ -208,6 +214,7 @@ class BaseRoleAgent:
             logprob=float(best.score),
             valid=best.valid,
             terminal_error=best.terminal_error,
+            candidate_records=candidate_records,
         )
 
     def _refresh_conditioning_context(
@@ -263,6 +270,27 @@ class BaseRoleAgent:
             return self.evaluator.parser.parse(tokens).canonical
         except ParseError:
             return None
+
+    def _build_candidate_records(self, ranked: list[ProposalCandidate], limit: int = 8) -> tuple[FormulaCandidate, ...]:
+        records: list[FormulaCandidate] = []
+        seen: set[str] = set()
+        for candidate in ranked:
+            if not candidate.valid:
+                continue
+            canonical = self._canonical_from_tokens(candidate.body_tokens)
+            if canonical is None or canonical in seen:
+                continue
+            seen.add(canonical)
+            records.append(
+                FormulaCandidate(
+                    formula=" ".join(candidate.body_tokens),
+                    source=candidate.source,
+                    role=self.role,
+                )
+            )
+            if len(records) >= limit:
+                break
+        return tuple(records)
 
     def _select_novel_seed_override(self, candidates, pool, evaluator):
         if pool is None or len(pool.records) == 0:

@@ -11,9 +11,33 @@ dependencies = [
   "numpy",
   "pandas",
   "PyYAML",
+]
+
+[project.optional-dependencies]
+train = [
   "torch",
+]
+eval = [
+  "duckdb",
+  "pyarrow",
+]
+wrds = [
+  "pg8000",
+  "pyarrow",
+]
+dev = [
+  "pytest",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "-m 'not eval and not train and not wrds'"
+markers = [
+  "eval: tests that require the evaluation stack such as duckdb or parquet readers",
+  "train: tests that require a healthy torch runtime",
+  "wrds: tests that require WRDS credentials or client dependencies",
+]
+
+[tool.setuptools.packages.find]
+include = ["knowledge_guided_symbolic_alpha*"]

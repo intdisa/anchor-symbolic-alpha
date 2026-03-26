@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 .venv*/
 outputs/
+artifacts/
 data/raw/
 data/interim/
 data/processed/

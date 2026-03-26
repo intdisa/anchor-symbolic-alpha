@@ -4,8 +4,14 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 
-import duckdb
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from knowledge_guided_symbolic_alpha.runtime import ensure_preflight
 
 
 DEFAULT_SOURCE_ROOT = Path("data/processed/us_equities/splits")
@@ -35,6 +41,12 @@ def sql_path(path: Path) -> str:
 
 def main() -> None:
     args = parse_args()
+    ensure_preflight("eval")
+    try:
+        import duckdb
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("`duckdb` is required for subset building. Install the `eval` dependency tier first.") from exc
+
     source_root = Path(args.source_root)
     output_root = Path(args.output_root) / args.name
     summary_root = Path(args.summary_root)

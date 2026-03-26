@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-try:
-    import torch
-    from torch import nn
-    import torch.nn.functional as F
-except ImportError:  # pragma: no cover
-    torch = None
-    nn = None
-    F = None
+from ...runtime import load_torch_symbols
+
+
+torch, nn, F = load_torch_symbols()
 
 
 _ModuleBase = nn.Module if nn is not None else object

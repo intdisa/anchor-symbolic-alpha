@@ -4,9 +4,16 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 
-import duckdb
 import yaml
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from knowledge_guided_symbolic_alpha.runtime import ensure_preflight
 
 
 DEFAULT_CONFIG_PATH = Path("configs/us_equities_panel.yaml")
@@ -45,6 +52,12 @@ def sql_path(path: Path) -> str:
 
 def main() -> None:
     args = parse_args()
+    ensure_preflight("eval")
+    try:
+        import duckdb
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("`duckdb` is required for panel building. Install the `eval` dependency tier first.") from exc
+
     config = load_panel_config(args.config_path)
     raw_root = Path(args.raw_root)
     interim_path = Path(args.interim_path)
@@ -147,7 +160,7 @@ def main() -> None:
     if args.skip_interim:
         raise ValueError("--skip-interim is not supported for the final build in this script.")
 
-    print("[route-b] build final panel", flush=True)
+    print("[us-equities] build final panel", flush=True)
     con.execute(
         f"""
         CREATE OR REPLACE TEMP VIEW names_v AS
@@ -333,7 +346,7 @@ def main() -> None:
         """
     )
 
-    print("[route-b] summarize panel", flush=True)
+    print("[us-equities] summarize panel", flush=True)
     panel_summary = con.execute(
         f"""
         WITH panel AS (

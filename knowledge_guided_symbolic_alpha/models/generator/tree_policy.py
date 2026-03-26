@@ -4,15 +4,9 @@ from collections import defaultdict
 
 from ...domain.operator_registry import OPERATOR_REGISTRY
 from ...language.tokens import FEATURE_TOKENS
+from ...runtime import load_torch_symbols
 
-try:
-    import torch
-    from torch import nn
-    import torch.nn.functional as F
-except ImportError:  # pragma: no cover
-    torch = None
-    nn = None
-    F = None
+torch, nn, F = load_torch_symbols()
 
 
 _ModuleBase = nn.Module if nn is not None else object

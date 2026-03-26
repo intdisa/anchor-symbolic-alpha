@@ -1,104 +1,151 @@
 # Experiment Log
 
-This document records the experiment files that currently matter for paper writing.
-It is a compact index, not a full report.
+This file tracks the current paper-facing outputs. Historical exploratory runs are
+left in `outputs/`, but they are not the mainline evidence set.
 
-Note: many historical output directories still contain `route_b` in the path.
-Those names are legacy artifacts from the exploratory phase.
+## Canonical mainline results
 
-## Main result files
+### Liquid500
 
-### Liquid500, 5 seeds
-
-- multiseed report:
-  - `outputs/route_b_liquid500_multiseed_5seed/reports/route_b_multiseed.json`
-- anchor-only confirmation:
-  - `outputs/route_b_liquid500_quality_multiseed_5seed/reports/route_b_multiseed.json`
-- current conclusion:
-  - `full == quality_solvency_only`
-  - `quality_solvency_only` is also identical on all 5 seeds
-  - champion: `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
+- workflow:
+  - `outputs/runs/liquid500_multiseed_e5_r3/reports/workflow_summary.json`
+- canonical consensus report:
+  - `outputs/runs/liquid500_multiseed_e5_r3__multiseed/reports/us_equities_multiseed_canonical.json`
+- mainline selector:
+  - `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
+- canonical walk-forward:
   - Sharpe `0.5694`
   - annual return `0.0439`
-  - max drawdown `-0.2937`
+  - mean test rank IC `0.01315`
   - turnover `0.0097`
+- interpretation:
+  - raw seeds are unstable
+  - support-adjusted cross-seed consensus recovers the stable cash-quality anchor
 
-### Liquid1000, stricter subset
+### Liquid1000
 
-- training report:
-  - `outputs/route_b_liquid1000_full_e3/reports/route_b_train_summary.json`
-- walk-forward report:
-  - `outputs/route_b_liquid1000_full_e3/reports/route_b_walk_forward.json`
-- anchor-only confirmation:
-  - `outputs/route_b_liquid1000_quality_e3/reports/route_b_train_summary.json`
-- direct formula baselines:
-  - `outputs/reports/route_b_liquid1000_formula_baselines.json`
-- current conclusion:
-  - champion: `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
-  - `quality_solvency_only` reaches the same champion in the current 3-episode run
+- workflow:
+  - `outputs/runs/liquid1000_multiseed_e5_r4/reports/workflow_summary.json`
+- canonical consensus report:
+  - `outputs/runs/liquid1000_multiseed_e5_r4__multiseed/reports/us_equities_multiseed_canonical.json`
+- full multiseed report:
+  - `outputs/runs/liquid1000_multiseed_e5_r4__multiseed/reports/us_equities_multiseed.json`
+- mainline selector:
+  - `canonical_by_variant.full.selector_records`
+  - `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
+- canonical walk-forward:
   - Sharpe `0.7330`
   - annual return `0.0530`
-  - max drawdown `-0.2436`
+  - mean test rank IC `0.01225`
   - turnover `0.0098`
+- raw seed diagnostics:
+  - mean Sharpe `0.5868`
+  - std Sharpe `0.2923`
+  - mean test rank IC `0.01050`
+  - std test rank IC `0.00349`
 
-## Ablation files
+## Mainline method conclusions
 
-### Liquid500 custom ablation
+- the anchor generator repeatedly finds the same cash-quality family
+- raw single-seed outputs should not be treated as the final result object
+- cross-seed support-adjusted consensus is now the canonical selector output
+- `full` and `quality_solvency_only` remain behaviorally identical on the current
+  mainline runs
+
+## Supporting selector results
+
+### Near-neighbor selector fix
+
+- code path:
+  - `knowledge_guided_symbolic_alpha/selection/robust_selector.py`
+- selector reruns:
+  - `outputs/runs/liquid500_selector_subset_e20_r2/reports/workflow_summary.json`
+  - `outputs/runs/liquid1000_selector_subset_e20_r2/reports/workflow_summary.json`
+- key effect:
+  - `liquid500` no longer misranks `PROFITABILITY_A CASH_RATIO_Q RANK ADD` above
+    the quarterly cash-quality anchor
+
+### Liquid500 seed-instability exposure
+
+- multiseed diagnostics:
+  - `outputs/runs/liquid500_multiseed_e5_r3__multiseed/reports/us_equities_multiseed.json`
+- raw picture:
+  - strong seed: `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
+  - middling seeds: `CASH_RATIO_Q RANK`
+  - bad seed: `PROFITABILITY_Q CASH_RATIO_Q PROFITABILITY_Q CORR_5 ADD`
+- implication:
+  - the remaining bottleneck is seed-robust selection, not agent routing
+
+## Ablation status
+
+### Liquid500 selector-synced ablation
 
 - report:
-  - `outputs/route_b_liquid500_ablation_custom/reports/route_b_ablation.json`
+  - `outputs/runs/liquid500_ablation_e5_r2__ablation/reports/us_equities_ablation.json`
 - key findings:
-  - removing `validation-backed` collapses to `RET_1 NEG`
-  - removing `flow gate` re-admits flow and hurts the final result
-  - removing `seed-priority` weakens champion selection
+  - `no_validation_backed` still collapses
+  - `full` and `quality_solvency_only` still match
+  - `short_horizon_flow_only` remains weaker and higher-turnover
 
-### Liquid1000 targeted ablations
+## Synthetic selector benchmark
 
-- no validation-backed:
-  - `outputs/route_b_liquid1000_ablation_no_validation/reports/route_b_ablation.json`
-- no flow gate:
-  - `outputs/route_b_liquid1000_ablation_no_flow_gate/reports/route_b_ablation.json`
-- key findings:
-  - `validation-backed` remains necessary on the stricter subset
-  - `flow gate` is not binding there because flow is not admitted anyway
+- smoke benchmark:
+  - `outputs/runs/synthetic_selector_repo_smoke/reports/synthetic_selector_benchmark.json`
+- key finding:
+  - naive rank-IC selection prefers the spurious short-horizon formula
+  - the robust selector recovers the stable anchor formula
 
-## Formula baseline files
+## Benchmark suite path
 
-### Liquid500 direct formula baselines
+- synthetic/public selector suites now run through:
+  - `scripts/run_selector_benchmark_suite.py`
+- paper-facing benchmark outputs should be read from:
+  - `outputs/runs/<run_name>/reports/*_selector_benchmark_summary.json`
+  - `outputs/runs/<run_name>/reports/*_selector_benchmark_leaderboard.csv`
+- paper-facing summary builder now also emits:
+  - `outputs/reports/us_equities_paper_results_benchmark_table.csv`
+  - `outputs/reports/us_equities_paper_results_ablation_table.csv`
+  - `outputs/reports/us_equities_paper_results_seed_dispersion.csv`
 
-- summary:
-  - `outputs/reports/route_b_liquid500_formula_baselines.json`
-- strongest direct formula currently observed:
-  - `CASH_RATIO_Q RANK SALES_TO_ASSETS_Q RANK ADD`
+## Current paper rule
 
-### Liquid1000 direct formula baselines
+Use these objects in the draft:
 
-- summary:
-  - `outputs/reports/route_b_liquid1000_formula_baselines.json`
-- strongest direct formula currently observed:
-  - `CASH_RATIO_Q RANK SALES_TO_ASSETS_Q RANK ADD`
-- interpretation:
-  - direct walk-forward on `valid + test` favors `cash + sales_to_assets`
-  - current leak-free train / validation selection still favors `cash + profitability`
-  - this is a selection-mismatch problem, not a reason to tune against the test split
+- `liquid500`: consensus report
+- `liquid1000`: `canonical_by_variant` from the multiseed report
+- raw `aggregated_by_variant`: diagnostics only
+- challenger-only variants: control studies only
 
-### Liquid500 baseline + challenger combination check
+Paper-facing summary artifact:
 
-- combo evaluation:
-  - `outputs/route_b_liquid500_combo_eval/reports/route_b_walk_forward.json`
-- key conclusion:
-  - adding `SALES_TO_ASSETS_Q RANK` to the anchor baseline does not beat the baseline
+- script:
+  - `scripts/build_paper_results.py`
+- generated outputs:
+  - `outputs/reports/us_equities_paper_results.json`
+  - `outputs/reports/us_equities_paper_results.md`
+  - `outputs/reports/us_equities_paper_results_main_table.csv`
 
-## Current interpretation
+## Benchmark suite refresh
 
-- currently validated anchor:
-  - `quality_solvency`
-- current effective formula:
-  - `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
-- current challengers:
-  - `efficiency_growth`
-  - `valuation_size`
-  - `short_horizon_flow`
-- current empirical status:
-  - challengers have not yet shown stable marginal gain over the anchor baseline
-  - default mainline runs should therefore be interpreted as anchor-only unless challengers are explicitly requested
+### Synthetic suite smoke5
+
+- report:
+  - `outputs/runs/synthetic_selector_suite_smoke5/reports/synthetic_selector_benchmark_summary.json`
+- leaderboard:
+  - `support_adjusted_cross_seed_consensus`: selection accuracy `1.00`
+  - `naive_rank_ic`: selection accuracy `0.85`
+  - `best_validation_mean_rank_ic`: selection accuracy `0.70`
+- key implication:
+  - the tuned near-neighbor setup now makes support-adjusted consensus the clear synthetic winner
+
+### Public suite smoke7
+
+- report:
+  - `outputs/runs/public_selector_suite_smoke7/reports/public_selector_benchmark_summary.json`
+- leaderboard:
+  - `support_adjusted_cross_seed_consensus`: selection accuracy `1.00`
+  - `naive_rank_ic`: selection accuracy `0.92`
+  - `cross_seed_mean_score_consensus`: selection accuracy `0.80`
+  - `single_seed_temporal_selector`: selection accuracy `0.84`
+- key implication:
+  - the added `feynman_product_seed_shift` task now makes the public symbolic suite separate the main method from both naive validation ranking and mean-score consensus

@@ -9,11 +9,11 @@ import pandas as pd
 import yaml
 
 
-DEFAULT_ROUTE_B_PANEL_CONFIG = Path("configs/us_equities_panel.yaml")
-DEFAULT_ROUTE_B_RAW_ROOT = Path("data/raw/route_b")
-DEFAULT_ROUTE_B_SPLIT_ROOT = Path("data/processed/route_b/splits")
+DEFAULT_US_EQUITIES_PANEL_CONFIG = Path("configs/us_equities_panel.yaml")
+DEFAULT_US_EQUITIES_RAW_ROOT = Path("data/raw/us_equities")
+DEFAULT_US_EQUITIES_SPLIT_ROOT = Path("data/processed/us_equities/splits")
 TARGET_COLUMNS = ("TARGET_RET_1", "TARGET_XS_RET_1")
-ROUTE_B_FEATURE_COLUMNS = (
+US_EQUITIES_FEATURE_COLUMNS = (
     "RET_1",
     "RET_5",
     "RET_20",
@@ -64,21 +64,32 @@ class USEquitiesPanelConfig:
     filters: dict[str, Any]
 
 
-def load_route_b_panel_config(path: str | Path = DEFAULT_ROUTE_B_PANEL_CONFIG) -> USEquitiesPanelConfig:
+def load_us_equities_panel_config(path: str | Path = DEFAULT_US_EQUITIES_PANEL_CONFIG) -> USEquitiesPanelConfig:
     payload = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if "us_equities_panel" in payload:
         config = payload["us_equities_panel"]
     else:
-        config = payload["route_b_panel"]
+        config = payload["us_equities_panel"]
     return USEquitiesPanelConfig(
-        raw_root=Path(config.get("raw_root", DEFAULT_ROUTE_B_RAW_ROOT)),
+        raw_root=Path(config.get("raw_root", DEFAULT_US_EQUITIES_RAW_ROOT)),
         splits={key: dict(value) for key, value in config["splits"].items()},
         filters=dict(config.get("filters", {})),
     )
 
 
-def load_route_b_raw_tables(raw_root: str | Path = DEFAULT_ROUTE_B_RAW_ROOT) -> dict[str, pd.DataFrame]:
-    root = _resolve_legacy_root(Path(raw_root))
+def load_us_equities_raw_tables(raw_root: str | Path = DEFAULT_US_EQUITIES_RAW_ROOT) -> dict[str, pd.DataFrame]:
+    root = Path(raw_root)
+    _ensure_required_files(
+        root,
+        {
+            "crsp_daily": root / "wrds" / "crsp_daily.csv.gz",
+            "crsp_names": root / "wrds" / "crsp_names.csv.gz",
+            "ccm_link": root / "wrds" / "ccm_link.csv.gz",
+            "compustat_quarterly": root / "wrds" / "compustat_quarterly.csv.gz",
+            "compustat_annual": root / "wrds" / "compustat_annual.csv.gz",
+        },
+        hint="Run `python scripts/export_wrds_us_equities.py` and place the extracted files under `data/raw/us_equities/wrds/`.",
+    )
     return {
         "crsp_daily": pd.read_csv(
             root / "wrds" / "crsp_daily.csv.gz",
@@ -110,10 +121,10 @@ def load_route_b_raw_tables(raw_root: str | Path = DEFAULT_ROUTE_B_RAW_ROOT) -> 
 
 def build_us_equities_panel(
     raw_root: str | Path | None = None,
-    config_path: str | Path = DEFAULT_ROUTE_B_PANEL_CONFIG,
+    config_path: str | Path = DEFAULT_US_EQUITIES_PANEL_CONFIG,
 ) -> USEquitiesPanelBundle:
-    config = load_route_b_panel_config(config_path)
-    tables = load_route_b_raw_tables(raw_root or config.raw_root)
+    config = load_us_equities_panel_config(config_path)
+    tables = load_us_equities_raw_tables(raw_root or config.raw_root)
     panel = build_panel_from_tables(tables, config.filters)
     splits = split_panel_by_dates(panel, config.splits)
     feature_columns = tuple(
@@ -129,8 +140,14 @@ def build_us_equities_panel(
     )
 
 
-def load_processed_route_b_splits(split_root: str | Path = DEFAULT_ROUTE_B_SPLIT_ROOT) -> USEquitiesProcessedBundle:
-    root = _resolve_legacy_root(Path(split_root))
+def load_processed_us_equities_splits(split_root: str | Path = DEFAULT_US_EQUITIES_SPLIT_ROOT) -> USEquitiesProcessedBundle:
+    root = Path(split_root)
+    if not root.exists():
+        raise FileNotFoundError(
+            "Processed split root is missing: "
+            f"{root}. Build the panel first with `python scripts/build_us_equities_panel.py` "
+            "or create a subset with `python scripts/build_us_equities_subset.py`."
+        )
     train = _read_processed_split(root, "train")
     valid = _read_processed_split(root, "valid")
     test = _read_processed_split(root, "test")
@@ -144,11 +161,6 @@ def load_processed_route_b_splits(split_root: str | Path = DEFAULT_ROUTE_B_SPLIT
         target_columns=TARGET_COLUMNS,
         splits=USEquitiesSplits(train=train, valid=valid, test=test),
     )
-
-
-load_us_equities_panel_config = load_route_b_panel_config
-load_us_equities_raw_tables = load_route_b_raw_tables
-load_processed_us_equities_splits = load_processed_route_b_splits
 
 
 def _read_processed_split(root: Path, split_name: str) -> pd.DataFrame:
@@ -171,14 +183,19 @@ def _read_processed_split(root: Path, split_name: str) -> pd.DataFrame:
                 "siccd": "Int64",
             },
         )
-    raise FileNotFoundError(f"Neither {parquet_path} nor {csv_path} exists.")
+    raise FileNotFoundError(
+        f"Missing split file for `{split_name}` under {root}. "
+        f"Expected one of {parquet_path.name} or {csv_path.name}. "
+        "Rebuild the processed split directory from the canonical `data/processed/us_equities/...` layout."
+    )
 
 
-def _resolve_legacy_root(path: Path) -> Path:
-    if path.exists():
-        return path
-    legacy = Path(str(path).replace("/us_equities/", "/route_b/"))
-    return legacy if legacy.exists() else path
+def _ensure_required_files(root: Path, required: dict[str, Path], *, hint: str) -> None:
+    missing = {name: path for name, path in required.items() if not path.exists()}
+    if not missing:
+        return
+    details = ", ".join(f"{name}={path}" for name, path in missing.items())
+    raise FileNotFoundError(f"Missing required U.S. equities raw files under {root}: {details}. {hint}")
 
 
 def build_panel_from_tables(tables: dict[str, pd.DataFrame], filters: dict[str, Any] | None = None) -> pd.DataFrame:
@@ -231,7 +248,11 @@ def _prepare_daily_panel(frame: pd.DataFrame, filters: dict[str, Any]) -> pd.Dat
     daily["turnover"] = daily["vol"] / daily["shares_out"]
     daily["turnover_20"] = grouped["turnover"].transform(lambda s: s.rolling(20, min_periods=20).mean())
     daily["dollar_volume_20"] = grouped["dollar_volume"].transform(lambda s: s.rolling(20, min_periods=20).mean())
-    daily["amihud_20"] = grouped.apply(_rolling_amihud).reset_index(level=0, drop=True)
+    daily["amihud_20"] = (
+        daily.groupby("permno", group_keys=False)[["ret_1", "dollar_volume"]]
+        .apply(_rolling_amihud)
+        .reset_index(level=0, drop=True)
+    )
     daily["price_to_252_high"] = grouped["close"].transform(lambda s: s / s.rolling(252, min_periods=20).max() - 1.0)
     daily["target_ret_1_raw"] = grouped["ret_1"].shift(-1)
 
@@ -386,7 +407,7 @@ def _finalize_panel(panel: pd.DataFrame, filters: dict[str, Any]) -> pd.DataFram
         "ticker",
         "comnam",
         "siccd",
-        *ROUTE_B_FEATURE_COLUMNS,
+        *US_EQUITIES_FEATURE_COLUMNS,
         *TARGET_COLUMNS,
     ]
     result = result[keep].sort_values(["date", "permno"]).reset_index(drop=True)

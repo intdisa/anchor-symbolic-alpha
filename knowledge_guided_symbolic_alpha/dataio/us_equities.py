@@ -40,7 +40,7 @@ class WRDSExtractSpec:
 
 
 @dataclass(frozen=True)
-class RouteBConfig:
+class USEquitiesConfig:
     output_root: Path
     start_date: str
     end_date: str
@@ -49,17 +49,17 @@ class RouteBConfig:
     public_series: dict[str, dict[str, Any]]
 
 
-def load_route_b_config(path: str | Path) -> RouteBConfig:
+def load_us_equities_config(path: str | Path) -> USEquitiesConfig:
     config_path = Path(path)
     payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    config = payload.get("us_equities") or payload.get("route_b", {})
-    output_root = Path(config.get("output_root", "data/raw/route_b"))
+    config = payload["us_equities"]
+    output_root = Path(config.get("output_root", "data/raw/us_equities"))
     start_date = str(config["start_date"])
     end_date = str(config["end_date"])
     universe_name = str(config.get("universe_name", "us_equities"))
     wrds_specs = tuple(_parse_wrds_spec(name, config["wrds"][name], start_date, end_date) for name in WRDS_REQUIRED_DATASETS)
     public_series = {str(name): dict(spec) for name, spec in config.get("public_sources", {}).items()}
-    return RouteBConfig(
+    return USEquitiesConfig(
         output_root=output_root,
         start_date=start_date,
         end_date=end_date,
@@ -103,7 +103,7 @@ def build_wrds_query(spec: WRDSExtractSpec) -> str:
     return "\n".join(sql)
 
 
-def default_output_paths(config: RouteBConfig) -> dict[str, Path]:
+def default_output_paths(config: USEquitiesConfig) -> dict[str, Path]:
     wrds_root = config.output_root / "wrds"
     public_root = config.output_root / "public"
     paths = {
@@ -119,7 +119,7 @@ def default_output_paths(config: RouteBConfig) -> dict[str, Path]:
     return paths
 
 
-def validate_route_b_layout(root: str | Path) -> dict[str, list[str]]:
+def validate_us_equities_layout(root: str | Path) -> dict[str, list[str]]:
     root_path = Path(root)
     missing_wrds = [name for name in WRDS_REQUIRED_DATASETS if not any(root_path.glob(f"wrds/{name}.*"))]
     missing_public = [name for name in PUBLIC_REQUIRED_DATASETS if not any(root_path.glob(f"public/{name}.*"))]
@@ -127,7 +127,3 @@ def validate_route_b_layout(root: str | Path) -> dict[str, list[str]]:
         "missing_wrds": missing_wrds,
         "missing_public": missing_public,
     }
-
-
-load_us_equities_config = load_route_b_config
-validate_us_equities_layout = validate_route_b_layout

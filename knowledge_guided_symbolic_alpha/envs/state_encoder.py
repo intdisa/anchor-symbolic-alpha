@@ -26,7 +26,7 @@ class StateEncoder:
     ) -> None:
         self.first_group_features = first_group_features
         self.second_group_features = second_group_features
-        self.latest_columns = latest_columns or ("GOLD_CLOSE", "GOLD_VOLUME", "CPI", "TNX", "VIX", "DXY")
+        self.latest_columns = latest_columns or ("RET_1", "DOLLAR_VOLUME_20", "CPI", "TNX", "VIX", "DXY")
 
     def encode(
         self,

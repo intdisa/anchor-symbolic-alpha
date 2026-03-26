@@ -7,16 +7,10 @@ from typing import Iterable
 import numpy as np
 
 from ...language.tokens import BODY_TOKENS, EOS_TOKEN, SOS_TOKEN
+from ...runtime import load_torch_symbols
 from .base import GeneratorConditioningContext
 
-try:
-    import torch
-    from torch import nn
-    import torch.nn.functional as F
-except ImportError:  # pragma: no cover - exercised when torch is unavailable.
-    torch = None
-    nn = None
-    F = None
+torch, nn, F = load_torch_symbols()
 
 
 class NeuralSequenceGenerator:

@@ -9,9 +9,9 @@ import pytest
 from knowledge_guided_symbolic_alpha.dataio.us_equities_panel import (
     build_panel_from_tables,
     build_us_equities_panel,
-    load_processed_route_b_splits,
-    load_route_b_panel_config,
-    load_route_b_raw_tables,
+    load_processed_us_equities_splits,
+    load_us_equities_panel_config,
+    load_us_equities_raw_tables,
 )
 
 
@@ -20,7 +20,7 @@ def _write_csv_gz(frame: pd.DataFrame, path: Path) -> None:
     frame.to_csv(path, index=False, compression="gzip")
 
 
-def _make_route_b_tables() -> dict[str, pd.DataFrame]:
+def _make_us_equities_tables() -> dict[str, pd.DataFrame]:
     dates = pd.bdate_range("2020-01-01", periods=80)
     rows = []
     for permno, base_price, gvkey in [(10001, 20.0, "001000"), (10002, 35.0, "002000")]:
@@ -80,7 +80,7 @@ def _make_route_b_tables() -> dict[str, pd.DataFrame]:
 
 
 def test_build_panel_from_tables_generates_cross_sectional_targets() -> None:
-    tables = _make_route_b_tables()
+    tables = _make_us_equities_tables()
     panel = build_panel_from_tables(
         tables,
         {
@@ -99,34 +99,39 @@ def test_build_panel_from_tables_generates_cross_sectional_targets() -> None:
     assert by_date_mean < 1e-10
 
 
-def test_route_b_raw_table_loader_reads_expected_files(tmp_path: Path) -> None:
-    tables = _make_route_b_tables()
-    root = tmp_path / "route_b"
+def test_us_equities_raw_table_loader_reads_expected_files(tmp_path: Path) -> None:
+    tables = _make_us_equities_tables()
+    root = tmp_path / "us_equities"
     _write_csv_gz(tables["crsp_daily"], root / "wrds" / "crsp_daily.csv.gz")
     _write_csv_gz(tables["crsp_names"], root / "wrds" / "crsp_names.csv.gz")
     _write_csv_gz(tables["ccm_link"], root / "wrds" / "ccm_link.csv.gz")
     _write_csv_gz(tables["compustat_quarterly"], root / "wrds" / "compustat_quarterly.csv.gz")
     _write_csv_gz(tables["compustat_annual"], root / "wrds" / "compustat_annual.csv.gz")
 
-    loaded = load_route_b_raw_tables(root)
+    loaded = load_us_equities_raw_tables(root)
 
     assert set(loaded) == set(tables)
     assert len(loaded["crsp_daily"]) == len(tables["crsp_daily"])
 
 
+def test_us_equities_raw_table_loader_raises_clear_error_for_missing_files(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="Missing required U.S. equities raw files"):
+        load_us_equities_raw_tables(tmp_path / "us_equities")
+
+
 def test_build_us_equities_panel_creates_non_empty_splits(tmp_path: Path) -> None:
-    tables = _make_route_b_tables()
-    root = tmp_path / "route_b"
+    tables = _make_us_equities_tables()
+    root = tmp_path / "us_equities"
     _write_csv_gz(tables["crsp_daily"], root / "wrds" / "crsp_daily.csv.gz")
     _write_csv_gz(tables["crsp_names"], root / "wrds" / "crsp_names.csv.gz")
     _write_csv_gz(tables["ccm_link"], root / "wrds" / "ccm_link.csv.gz")
     _write_csv_gz(tables["compustat_quarterly"], root / "wrds" / "compustat_quarterly.csv.gz")
     _write_csv_gz(tables["compustat_annual"], root / "wrds" / "compustat_annual.csv.gz")
 
-    config_path = tmp_path / "route_b_panel.yaml"
+    config_path = tmp_path / "us_equities_panel.yaml"
     config_path.write_text(
         """
-route_b_panel:
+us_equities_panel:
   raw_root: {raw_root}
   splits:
     train:
@@ -149,7 +154,7 @@ route_b_panel:
         encoding="utf-8",
     )
 
-    config = load_route_b_panel_config(config_path)
+    config = load_us_equities_panel_config(config_path)
     bundle = build_us_equities_panel(raw_root=config.raw_root, config_path=config_path)
 
     assert bundle.feature_columns
@@ -158,9 +163,10 @@ route_b_panel:
     assert not bundle.splits.test.empty
 
 
-def test_load_processed_route_b_splits_reads_split_parquets(tmp_path: Path) -> None:
+@pytest.mark.eval
+def test_load_processed_us_equities_splits_reads_split_parquets(tmp_path: Path) -> None:
     pytest.importorskip("pyarrow")
-    tables = _make_route_b_tables()
+    tables = _make_us_equities_tables()
     panel = build_panel_from_tables(
         tables,
         {
@@ -178,7 +184,7 @@ def test_load_processed_route_b_splits_reads_split_parquets(tmp_path: Path) -> N
     panel.loc[(panel["date"] > pd.Timestamp("2020-03-10")) & (panel["date"] <= pd.Timestamp("2020-03-31"))].to_parquet(split_root / "valid.parquet", index=False)
     panel.loc[panel["date"] > pd.Timestamp("2020-03-31")].to_parquet(split_root / "test.parquet", index=False)
 
-    bundle = load_processed_route_b_splits(split_root)
+    bundle = load_processed_us_equities_splits(split_root)
 
     assert bundle.feature_columns
     assert not bundle.splits.train.empty
@@ -186,8 +192,8 @@ def test_load_processed_route_b_splits_reads_split_parquets(tmp_path: Path) -> N
     assert not bundle.splits.test.empty
 
 
-def test_load_processed_route_b_splits_reads_csv_fallback(tmp_path: Path) -> None:
-    tables = _make_route_b_tables()
+def test_load_processed_us_equities_splits_reads_csv_fallback(tmp_path: Path) -> None:
+    tables = _make_us_equities_tables()
     panel = build_panel_from_tables(
         tables,
         {
@@ -205,9 +211,32 @@ def test_load_processed_route_b_splits_reads_csv_fallback(tmp_path: Path) -> Non
     panel.loc[(panel["date"] > pd.Timestamp("2020-03-10")) & (panel["date"] <= pd.Timestamp("2020-03-31"))].to_csv(split_root / "valid.csv.gz", index=False, compression="gzip")
     panel.loc[panel["date"] > pd.Timestamp("2020-03-31")].to_csv(split_root / "test.csv.gz", index=False, compression="gzip")
 
-    bundle = load_processed_route_b_splits(split_root)
+    bundle = load_processed_us_equities_splits(split_root)
 
     assert bundle.feature_columns
     assert not bundle.splits.train.empty
     assert not bundle.splits.valid.empty
     assert not bundle.splits.test.empty
+
+
+def test_load_processed_us_equities_splits_raises_clear_error_for_missing_root(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="Processed split root is missing"):
+        load_processed_us_equities_splits(tmp_path / "us_equities" / "subsets" / "liquid150_2010_2025")
+
+
+def test_load_processed_us_equities_splits_raises_clear_error_for_missing_split(tmp_path: Path) -> None:
+    split_root = tmp_path / "splits"
+    split_root.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2020-01-02"]),
+            "permno": [1],
+            "ticker": ["AAA"],
+            "comnam": ["Alpha"],
+            "siccd": [3571],
+            "TARGET_RET_1": [0.01],
+            "TARGET_XS_RET_1": [0.01],
+        }
+    ).to_csv(split_root / "train.csv.gz", index=False, compression="gzip")
+    with pytest.raises(FileNotFoundError, match="Missing split file for `valid`"):
+        load_processed_us_equities_splits(split_root)

@@ -30,7 +30,7 @@ us_equities:
       order_by:
         - permno
         - date
-      output_file: crsp_daily.parquet
+      output_file: crsp_daily.csv.gz
     crsp_names:
       schema: crsp
       table: dsenames
@@ -50,7 +50,7 @@ us_equities:
       order_by:
         - permno
         - namedt
-      output_file: crsp_names.parquet
+      output_file: crsp_names.csv.gz
     ccm_link:
       schema: crsp
       table: ccmxpf_linktable
@@ -68,7 +68,7 @@ us_equities:
       order_by:
         - lpermno
         - linkdt
-      output_file: ccm_link.parquet
+      output_file: ccm_link.csv.gz
     compustat_quarterly:
       schema: comp
       table: fundq
@@ -103,7 +103,7 @@ us_equities:
       order_by:
         - gvkey
         - datadate
-      output_file: compustat_quarterly.parquet
+      output_file: compustat_quarterly.csv.gz
     compustat_annual:
       schema: comp
       table: funda
@@ -132,10 +132,10 @@ us_equities:
       order_by:
         - gvkey
         - datadate
-      output_file: compustat_annual.parquet
+      output_file: compustat_annual.csv.gz
   public_sources:
     fama_french_daily:
-      output_file: fama_french_daily.parquet
+      output_file: fama_french_daily.csv.gz
       source: "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library/f-f_factors.html"
       fields:
         - mktrf
@@ -146,7 +146,7 @@ us_equities:
         - mom
         - rf
     fred_macro_daily:
-      output_file: fred_macro_daily.parquet
+      output_file: fred_macro_daily.csv.gz
       source: "https://fred.stlouisfed.org/docs/api/fred/fred/"
       fields:
         - VIXCLS

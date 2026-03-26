@@ -2,157 +2,137 @@
 
 ## Current thesis
 
-The project should no longer be presented as a "multi-agent synergy" paper.
+The project should now be framed as:
 
-The empirically supported thesis is:
+- one anchor generator produces a candidate formula pool
+- a cross-seed robust selector resolves formula choice under temporal shift
+- auxiliary skill families are diagnostic branches until they show stable additive value
 
-- one anchor agent discovers and upgrades the main factor family
-- challenger agents are used to test replacement or additive hypotheses
-- the manager's main value is validation-backed selection, replacement, and gating
+The current paper object is therefore not "multi-agent synergy." It is:
 
-In the current codebase, this means:
+- generator-agnostic symbolic candidate generation
+- robust formula selection under temporal and seed variability
+- empirical analysis on U.S. equities plus selector-focused benchmarks
 
-- anchor agent: `quality_solvency`
-- challengers:
-  - `efficiency_growth`
-  - `valuation_size`
-  - `short_horizon_flow`
-- top-level controller:
-  - `HierarchicalManagerAgent`
-- default experiment mode:
-  - anchor-only (`quality_solvency`)
-- challenger families are now opt-in verification branches, not part of the default main run
+## Supported claims
 
-Note:
+1. The anchor generator repeatedly rediscovers a positive `cash + quality` family on
+   U.S. equities.
+2. Single-seed outcomes are not reliable enough to be treated as the final result.
+3. Cross-seed support-adjusted consensus recovers a stronger and more stable formula
+   than naive seed averaging or naive validation reselection.
+4. `full` and `quality_solvency_only` remain behaviorally identical in the current
+   mainline runs, so extra skill families are not yet part of the main contribution.
 
-- older reports may still use the alias `trend_structure_only`
-- in the current split setup, that alias expands to:
-  - `quality_solvency`
-  - `efficiency_growth`
-  - `valuation_size`
+## Unsupported claims
 
-## What the current experiments support
+1. Multi-agent cooperation is the source of the main gain.
+2. Every skill family contributes marginal alpha.
+3. The raw best-per-seed result is a stable discovery object.
 
-### Supported claims
+## Canonical result objects
 
-1. A strict symbolic search pipeline can stably discover a positive cross-sectional
-   `cash + quality` factor on U.S. equities.
-2. Validation-backed commit / replacement is necessary.
-3. Challenger gating matters because naive re-admission of short-horizon flow can
-   degrade the final result.
-4. The manager is useful as a selector and gatekeeper even when only one anchor
-   family dominates the final library.
+Mainline multiseed runs now have two layers:
 
-### Unsupported claims
+- diagnostics: `outputs/runs/<run_name>__multiseed/reports/us_equities_multiseed.json`
+- canonical result: `outputs/runs/<run_name>__multiseed/reports/us_equities_multiseed_canonical.json`
 
-1. Multi-agent synergy is the source of the main gain.
-2. `full` is better than the best single anchor family.
-3. Every skill family contributes stable marginal alpha.
+Use the canonical report in main tables. Treat the raw report as supporting
+evidence about seed dispersion and failure modes.
 
-## Current main result
+## Current main results
 
-### Liquid500, 5 seeds
+### Liquid500
 
-- champion: `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
-- `full == quality_solvency_only`
-- `quality_solvency_only` also recovers the same champion on all 5 seeds
-- Sharpe: `0.5694`
-- annual return: `0.0439`
-- max drawdown: `-0.2937`
-- turnover: `0.0097`
-
-### Liquid1000, stricter subset
-
-- champion: `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
-- `quality_solvency_only` also recovers the same champion in the current 3-episode run
-- Sharpe: `0.7330`
-- annual return: `0.0530`
-- max drawdown: `-0.2436`
-- turnover: `0.0098`
-
-## Current interpretation of agents
-
-### `quality_solvency`
-
-- role: anchor agent
-- effective feature family:
-  - `CASH_RATIO_Q`
-  - `PROFITABILITY_Q`
-  - `PROFITABILITY_A`
-  - `LEVERAGE_Q`
-  - `LEVERAGE_A`
-  - `SIZE_LOG_MCAP`
-- current champion family:
+- canonical source:
+  - `outputs/runs/liquid500_multiseed_e5_r3__multiseed/reports/us_equities_multiseed_canonical.json`
+- canonical selector:
   - `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
-- direct evidence:
-  - `quality_solvency_only` matches the current `full` result on liquid500 across 5 seeds
+- canonical walk-forward:
+  - Sharpe `0.5694`
+  - mean test rank IC `0.01315`
+- interpretation:
+  - raw seed outcomes vary materially
+  - cross-seed consensus recovers the stable cash-quality anchor
 
-### `efficiency_growth`
+### Liquid1000
 
-- role: challenger
-- representative signals such as `SALES_TO_ASSETS_Q RANK` are not pure noise
-- but they do not yet improve the anchor baseline consistently under the current
-  selection criterion
+- canonical source:
+  - `outputs/runs/liquid1000_multiseed_e5_r4__multiseed/reports/us_equities_multiseed_canonical.json`
+- canonical selector:
+  - `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
+- canonical walk-forward:
+  - Sharpe `0.7330`
+  - mean test rank IC `0.01225`
+- raw seed diagnostics:
+  - mean Sharpe `0.5868`
+  - std Sharpe `0.2923`
+- interpretation:
+  - the selector should be judged by the consensus result, not by raw seed averages
 
-### `valuation_size`
+## Current method interpretation
 
-- role: challenger
-- currently weak; no stable accepted formula in the current smoke setting
+### Generator
 
-### `short_horizon_flow`
+- current anchor family:
+  - `quality_solvency`
+- empirical behavior:
+  - repeatedly surfaces `CASH_RATIO_Q`
+  - repeatedly surfaces `PROFITABILITY_Q`
+  - can still drift to weaker single-factor or noisy correlation formulas on some seeds
 
-- role: challenger
-- has standalone short-horizon signal
-- does not provide stable marginal value on top of the anchor baseline
+### Selector
+
+- current mainline object:
+  - support-adjusted cross-seed consensus
+- current job:
+  - rank candidate formulas under temporal shift
+  - use cross-seed recurrence as an extra stability signal
+  - break near-neighbor ties in favor of prior-aligned quarterly anchors
+
+### Auxiliary skills
+
+- `efficiency_growth`
+- `valuation_size`
+- `short_horizon_flow`
+
+Current status:
+
+- `short_horizon_flow` remains a useful failure-analysis branch, not a main result
+- the other challenger families have not shown stable additive value
+- `full` still collapses to the same result as `quality_solvency_only`
 
 ## What this means for the paper
 
-The paper should be framed as:
+The mainline paper should be organized around:
 
-- anchor-agent symbolic discovery
-- challenger-based verification
-- validation-backed replacement and walk-forward-aware selection
+- `generator / selector / benchmark`
+- cross-seed robust symbolic selection
+- temporal distribution shift and Rashomon candidate pools
+- synthetic plus public symbolic benchmark suites alongside U.S. equities
 
-The paper should not currently be framed as:
+The paper should not currently be organized around:
 
-- general multi-agent cooperation
-- synergistic multi-skill alpha libraries
+- multi-agent coordination as the core contribution
+- challenger-family synergy
+- library-level diversification claims
 
-## Immediate experimental priorities
+## Immediate priorities
 
-1. Treat `quality_solvency_only` as the primary baseline to confirm the anchor-only
-   thesis directly.
-2. Keep challenger experiments as verification studies, not main-result drivers.
-3. Strengthen baseline comparisons against direct formulas and simpler selection
-   schemes.
-4. Preserve current ablations around:
-   - validation-backed selection
-   - replacement-first admission
-   - residual challenger gating
+1. Make `canonical_by_variant` the default object used in experiment summaries and
+   paper tables.
+2. Expand the synthetic selector benchmark so the selector claim is supported
+   outside U.S. equities.
+3. Keep challenger runs as diagnostic controls, not as the headline result.
 
-## Current selection-mismatch note
+Current paper-table build script:
 
-The strongest directly tested formula is currently:
+- `scripts/build_paper_results.py`
+- `scripts/run_selector_benchmark_suite.py`
+- `docs/selector_theory_note.md`
 
-- `CASH_RATIO_Q RANK SALES_TO_ASSETS_Q RANK ADD`
+Current paper-writing artifacts:
 
-However, the current leak-free train / validation evidence still prefers:
-
-- `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`
-
-That means the remaining mismatch is likely due to regime shift between validation
-and test, not a trivial search bug. The project should therefore avoid forcing
-`cash + sales_to_assets` into the main line using test-aware tuning.
-
-## Narrative fallback rule
-
-If future experiments still show:
-
-- `full == anchor baseline`
-- no challenger delivers stable incremental gain
-
-then the final paper should fully drop the multi-agent claim and keep only:
-
-- knowledge-constrained symbolic discovery
-- validation-backed factor selection
-- replacement-first baseline upgrades
+- `outputs/reports/us_equities_paper_results.md`
+- `outputs/reports/us_equities_paper_results_claims.json`
+- `outputs/reports/us_equities_paper_results_draft_outline.md`

@@ -4,7 +4,7 @@ training:
   baseline_generator: rnn
   pretraining:
     load_checkpoint: false
-    checkpoint: outputs/checkpoints/synthetic_prior_transformer.pt
+    checkpoint: artifacts/checkpoints/synthetic_prior_transformer.pt
     synthetic_examples: 128
     synthetic_epochs: 3
     synthetic_length: 96

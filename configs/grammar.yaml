@@ -3,8 +3,13 @@ language:
   max_length: 15
   min_length: 3
   features:
-    - GOLD_CLOSE
-    - GOLD_VOLUME
+    - RET_1
+    - VOLATILITY_20
+    - DOLLAR_VOLUME_20
+    - CASH_RATIO_Q
+    - PROFITABILITY_Q
+    - LEVERAGE_Q
+    - SALES_TO_ASSETS_Q
     - CPI
     - TNX
     - VIX

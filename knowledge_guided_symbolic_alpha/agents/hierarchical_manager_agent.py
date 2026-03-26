@@ -10,6 +10,7 @@ from ..evaluation.distributional_critic import DistributionalCollectionCritic
 from ..evaluation.factor_pool import FactorPool
 from ..evaluation.panel_dispatch import is_cross_sectional_frame
 from ..evaluation.role_profiles import normalize_role
+from ..generation import FormulaCandidate
 from ..memory import ExperienceMemory
 from ..models.controllers import LibraryPlanner, RegimeController
 from ..training.curriculum import CurriculumStage
@@ -20,6 +21,8 @@ from .reviewer_agent import ReviewOutcome, ReviewerAgent
 
 @dataclass(frozen=True)
 class HierarchicalManagerStep:
+    formula_tokens: tuple[str, ...]
+    candidate_records: tuple[FormulaCandidate, ...]
     selected_agent: str
     regime: str
     reward: float
@@ -107,6 +110,8 @@ class HierarchicalManagerAgent:
         self.allow_validation_backed_replacement = allow_validation_backed_replacement
         self.allow_validation_backed_upgrade = allow_validation_backed_upgrade
         self.enforce_flow_residual_gate = enforce_flow_residual_gate
+        self._generated_candidates: list[FormulaCandidate] = []
+        self._generated_formulas: set[str] = set()
 
     def apply_curriculum(self, stage: CurriculumStage) -> None:
         for agent in self.agents.values():
@@ -164,6 +169,13 @@ class HierarchicalManagerAgent:
                     outcome.decision.accepted,
                     "bootstrap_seed" if bootstrap_reward != outcome.clipped_reward else outcome.decision.reason,
                 )
+                self._remember_generated_candidate(
+                    FormulaCandidate(
+                        formula=" ".join(tokens),
+                        source="warm_start_seed",
+                        role=skill_name,
+                    )
+                )
         self._warm_started = True
 
     def run_step(
@@ -190,8 +202,9 @@ class HierarchicalManagerAgent:
         planner_decision = self.planner.plan(common_state)
         ordered_skills = self._candidate_skill_order(planner_decision.ordered_skills)
         candidates: list[_SkillCandidate] = []
+        step_candidate_records: list[FormulaCandidate] = []
         for skill_name in ordered_skills:
-            if not self._route_b_stage_allows_skill(skill_name, data):
+            if not self._us_equities_stage_allows_skill(skill_name, data):
                 continue
             agent = self.agents[skill_name]
             agent.set_context(regime)
@@ -203,6 +216,10 @@ class HierarchicalManagerAgent:
                 validation_data=validation_data,
                 validation_target=validation_target,
             )
+            for record in proposal.candidate_records:
+                self._remember_generated_candidate(record)
+                if record.formula not in {item.formula for item in step_candidate_records}:
+                    step_candidate_records.append(record)
             estimate = self.critic.estimate(
                 proposal.body_tokens,
                 data,
@@ -248,7 +265,7 @@ class HierarchicalManagerAgent:
                     selection_score += 1.0
                 elif normalize_role(skill_name) == "target_flow":
                     selection_score -= 0.04
-            selection_score += self._route_b_slow_family_bonus(skill_name, data)
+            selection_score += self._us_equities_slow_family_bonus(skill_name, data)
             selection_score += self._cross_sectional_selection_bonus(estimate, data)
             flow_residual_allowed, flow_residual_reason = self._cross_sectional_flow_residual_status(
                 pool,
@@ -285,6 +302,8 @@ class HierarchicalManagerAgent:
 
         if not candidates:
             return HierarchicalManagerStep(
+                formula_tokens=tuple(),
+                candidate_records=tuple(step_candidate_records),
                 selected_agent="none",
                 regime=regime,
                 reward=0.0,
@@ -457,6 +476,8 @@ class HierarchicalManagerAgent:
         if accepted:
             self.accepted_counts[selected.skill_name] += 1
         return HierarchicalManagerStep(
+            formula_tokens=tuple(selected.proposal.body_tokens),
+            candidate_records=tuple(step_candidate_records),
             selected_agent=selected.skill_name,
             regime=regime,
             reward=float(final_reward),
@@ -464,6 +485,22 @@ class HierarchicalManagerAgent:
             decision_reason=decision_reason,
             review_reason=selected.review_reason,
             pool_size=len(pool),
+        )
+
+    def generated_candidate_records(self) -> tuple[FormulaCandidate, ...]:
+        return tuple(self._generated_candidates)
+
+    def _remember_generated_candidate(self, candidate: FormulaCandidate) -> None:
+        formula = str(candidate.formula).strip()
+        if not formula or formula in self._generated_formulas:
+            return
+        self._generated_formulas.add(formula)
+        self._generated_candidates.append(
+            FormulaCandidate(
+                formula=formula,
+                source=str(candidate.source),
+                role=None if candidate.role is None else str(candidate.role),
+            )
         )
 
     def _candidate_skill_order(self, ordered_skills: tuple[str, ...], bootstrap_mode: bool = False) -> tuple[str, ...]:
@@ -496,7 +533,7 @@ class HierarchicalManagerAgent:
             available = anchored_skills + bootstrap_skills + available
         return tuple(dict.fromkeys(available))
 
-    def _route_b_stage_allows_skill(self, skill_name: str, data: pd.DataFrame) -> bool:
+    def _us_equities_stage_allows_skill(self, skill_name: str, data: pd.DataFrame) -> bool:
         if not is_cross_sectional_frame(data) or self.bootstrap_anchor_skill != "quality_solvency":
             return True
         slow_skills = tuple(
@@ -1012,7 +1049,7 @@ class HierarchicalManagerAgent:
             - 0.04 * drawdown
         )
 
-    def _route_b_slow_family_bonus(self, skill_name: str, data: pd.DataFrame) -> float:
+    def _us_equities_slow_family_bonus(self, skill_name: str, data: pd.DataFrame) -> float:
         if not is_cross_sectional_frame(data) or self.bootstrap_anchor_skill != "quality_solvency":
             return 0.0
         slow_skills = tuple(

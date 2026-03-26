@@ -17,7 +17,7 @@ publisher pages or PDF metadata.
 - title: `AlphaQCM: Alpha Discovery in Finance with Distributional Reinforcement Learning`
 - authors: Zhoufan Zhu, Ke Zhu
 - source file:
-  - `/Users/xieshangchen/Desktop/new gold/gold文献/1805_AlphaQCM_Alpha_Discovery_.pdf`
+  - `/Users/xieshangchen/Desktop/new project/文献/1805_AlphaQCM_Alpha_Discovery_.pdf`
 - role in our paper:
   - motivates collection-level evaluation instead of isolated single-formula reward
   - relevant when explaining why scalar train IC is not enough
@@ -31,7 +31,7 @@ publisher pages or PDF metadata.
 - short name: `AlphaCFG`
 - authors: Han Yang, Dong Hao, Zhuohan Wang, Qi Shi, Xingtong Li
 - source file:
-  - `/Users/xieshangchen/Desktop/new gold/gold文献/2601.22119v1.pdf`
+  - `/Users/xieshangchen/Desktop/new project/文献/2601.22119v1.pdf`
 - role in our paper:
   - supports grammar-constrained symbolic search
   - relevant for strict syntax / semantics / bounded search space
@@ -44,7 +44,7 @@ publisher pages or PDF metadata.
 - title: `FactorMiner: A Self-Evolving Agent with Skills and Experience Memory for Financial Alpha Discovery`
 - authors: Yanlong Wang, Jian Xu, Hongkang Zhang, Shao-Lun Huang, Danny Dongning Sun, Xiao-Ping Zhang
 - source file:
-  - `/Users/xieshangchen/Desktop/new gold/gold文献/2602.14670v1.pdf`
+  - `/Users/xieshangchen/Desktop/new project/文献/2602.14670v1.pdf`
 - role in our paper:
   - supports retrieve-generate-evaluate-distill loops
   - supports experience memory and failure-region reuse
@@ -57,7 +57,7 @@ publisher pages or PDF metadata.
 - title: `AlphaFormer: End-to-End Symbolic Regression of Alpha Factors with Transformers`
 - venue status: under review as an ICLR 2026 submission in the current PDF
 - source file:
-  - `/Users/xieshangchen/Desktop/new gold/gold文献/15375_AlphaFormer_End_to_End_S.pdf`
+  - `/Users/xieshangchen/Desktop/new project/文献/15375_AlphaFormer_End_to_End_S.pdf`
 - role in our paper:
   - motivates dataset-conditioned proposal priors
   - relevant if we keep any pretraining / transformer generator discussion
@@ -68,7 +68,7 @@ publisher pages or PDF metadata.
 
 - title: `Generating Synergistic Formulaic Alpha Collections via Reinforcement Learning`
 - source file:
-  - `/Users/xieshangchen/Desktop/new gold/gold文献/3580305.3599831.pdf`
+  - `/Users/xieshangchen/Desktop/new project/文献/3580305.3599831.pdf`
 - role in our paper:
   - supports optimizing alpha sets rather than isolated alphas
   - directly relevant to library-level reward and collection evaluation
@@ -81,7 +81,7 @@ publisher pages or PDF metadata.
 - title: `Multi-Agent Common Knowledge Reinforcement Learning`
 - authors: Christian Schroeder de Witt, Jakob Foerster, Gregory Farquhar, Philip H. S. Torr, Wendelin Boehmer, Shimon Whiteson
 - source file:
-  - `/Users/xieshangchen/Desktop/new gold/gold文献/NeurIPS-2019-multi-agent-common-knowledge-reinforcement-learning-Paper.pdf`
+  - `/Users/xieshangchen/Desktop/new project/文献/NeurIPS-2019-multi-agent-common-knowledge-reinforcement-learning-Paper.pdf`
 - role in our paper:
   - supports hierarchical coordination and common-knowledge state design
   - now more useful as architectural background than as the main claim
@@ -92,7 +92,7 @@ publisher pages or PDF metadata.
 
 - title: `Integrating Suboptimal Human Knowledge with Hierarchical Reinforcement Learning for Large-Scale Multiagent Systems`
 - source file:
-  - `/Users/xieshangchen/Desktop/new gold/gold文献/NeurIPS-2024-integrating-suboptimal-human-knowledge-with-hierarchical-reinforcement-learning-for-large-scale-multiagent-systems-Paper-Conference.pdf`
+  - `/Users/xieshangchen/Desktop/new project/文献/NeurIPS-2024-integrating-suboptimal-human-knowledge-with-hierarchical-reinforcement-learning-for-large-scale-multiagent-systems-Paper-Conference.pdf`
 - role in our paper:
   - supports soft knowledge priors instead of hard-coded trading rules
   - still useful if we discuss knowledge-guided search
@@ -105,7 +105,7 @@ publisher pages or PDF metadata.
 - title: `MA-HRL: Multi-Agent Hierarchical Reinforcement Learning for Medical Diagnostic Dialogue Systems`
 - authors: Xingchuang Liao et al.
 - source file:
-  - `/Users/xieshangchen/Desktop/new gold/gold文献/electronics-14-03001.pdf`
+  - `/Users/xieshangchen/Desktop/new project/文献/electronics-14-03001.pdf`
 - role in our paper:
   - generic hierarchical RL inspiration only
   - not a core finance citation
@@ -185,10 +185,10 @@ publisher pages or PDF metadata.
 
 The revised paper should be positioned around:
 
-- anchor-agent symbolic factor discovery
-- validation-backed selection
-- replacement-first baseline upgrades
-- challenger-based verification
+- generator-agnostic symbolic candidate pools
+- cross-seed robust symbolic selection
+- temporal-shift benchmark evaluation
+- U.S. equities as a real-world application, not the only evidence source
 
 ### Best papers for each claim
 

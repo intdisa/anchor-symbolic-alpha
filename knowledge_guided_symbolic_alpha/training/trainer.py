@@ -7,6 +7,7 @@ import pandas as pd
 
 from ..evaluation import FactorPool, score_pool_on_dataset
 from ..evaluation.factor_pool import FactorRecord
+from ..generation import FormulaCandidate
 from ..evaluation.panel_dispatch import is_cross_sectional_frame
 from ..evaluation.pool_scoring import rescore_pool_on_dataset
 from ..search import FormulaSampler
@@ -16,6 +17,7 @@ from .reward_shaping import PoolRewardShaper
 
 @dataclass(frozen=True)
 class TrainingEpisode:
+    formula: str
     tokens: tuple[str, ...]
     reward: float
     accepted: bool
@@ -34,11 +36,14 @@ class TrainingSummary:
     best_validation_selection_score: float
     champion_records: tuple[str, ...]
     final_records: tuple[str, ...]
+    candidate_records: tuple[str, ...]
     final_pool_size: int
+    candidate_record_summaries: tuple[FormulaCandidate, ...] = tuple()
 
 
 @dataclass(frozen=True)
 class MultiAgentTrainingEpisode:
+    formula: str
     selected_agent: str
     regime: str
     reward: float
@@ -63,7 +68,9 @@ class MultiAgentTrainingSummary:
     best_validation_selection_score: float
     champion_records: tuple[str, ...]
     final_records: tuple[str, ...]
+    candidate_records: tuple[str, ...]
     final_pool_size: int
+    candidate_record_summaries: tuple[FormulaCandidate, ...] = tuple()
     champion_record_summaries: tuple[PoolRecordSnapshot, ...] = tuple()
     final_record_summaries: tuple[PoolRecordSnapshot, ...] = tuple()
 
@@ -89,6 +96,8 @@ class ManagerLike(Protocol):
         validation_data: pd.DataFrame | None = None,
         validation_target: pd.Series | None = None,
     ): ...
+
+    def generated_candidate_records(self) -> tuple[FormulaCandidate, ...]: ...
 
 
 def _snapshot_pool(records: list[FactorRecord]) -> tuple[PoolRecordSnapshot, ...]:
@@ -124,6 +133,8 @@ class SingleAgentTrainer:
     ) -> TrainingSummary:
         pool = FactorPool(max_size=self.pool_max_size)
         history: list[TrainingEpisode] = []
+        seen_candidates: list[str] = []
+        candidate_summaries: list[FormulaCandidate] = []
         best_validation_pool_score = float("-inf")
         best_validation_selection_score = float("-inf")
         champion_records: tuple[str, ...] = tuple()
@@ -132,6 +143,16 @@ class SingleAgentTrainer:
             if self.curriculum is not None:
                 self._apply_sampler_curriculum(self.curriculum.stage_for_episode(episode_index, episodes))
             sample = self.sampler.sample()
+            formula_text = " ".join(sample.body_tokens)
+            if formula_text and formula_text not in seen_candidates:
+                seen_candidates.append(formula_text)
+                candidate_summaries.append(
+                    FormulaCandidate(
+                        formula=formula_text,
+                        source="sampled_formula",
+                        role=None,
+                    )
+                )
             outcome = self.reward_shaper.shape(
                 sample.body_tokens,
                 train_data,
@@ -160,6 +181,7 @@ class SingleAgentTrainer:
                 champion_records = tuple(" ".join(record.tokens) for record in pool.records)
             history.append(
                 TrainingEpisode(
+                    formula=formula_text,
                     tokens=sample.body_tokens,
                     reward=outcome.clipped_reward,
                     accepted=outcome.decision.accepted,
@@ -177,6 +199,8 @@ class SingleAgentTrainer:
             best_validation_selection_score=best_validation_selection_score,
             champion_records=champion_records,
             final_records=tuple(" ".join(record.tokens) for record in pool.records),
+            candidate_records=tuple(seen_candidates),
+            candidate_record_summaries=tuple(candidate_summaries),
             final_pool_size=len(pool),
         )
 
@@ -212,6 +236,7 @@ class MultiAgentTrainer:
     ) -> MultiAgentTrainingSummary:
         pool = FactorPool(max_size=self.pool_max_size)
         history: list[MultiAgentTrainingEpisode] = []
+        seen_candidates: list[str] = []
         best_validation_pool_score = float("-inf")
         best_validation_selection_score = float("-inf")
         champion_records: tuple[str, ...] = tuple()
@@ -235,6 +260,9 @@ class MultiAgentTrainer:
                 validation_data=validation_data,
                 validation_target=validation_target,
             )
+            formula_text = " ".join(step.formula_tokens)
+            if formula_text and formula_text not in seen_candidates:
+                seen_candidates.append(formula_text)
             validation_score = pool.pool_score()
             validation_selection_score = validation_score
             if validation_data is not None and validation_target is not None:
@@ -250,6 +278,7 @@ class MultiAgentTrainer:
                 champion_record_summaries = _snapshot_pool(pool.records)
             history.append(
                 MultiAgentTrainingEpisode(
+                    formula=formula_text,
                     selected_agent=step.selected_agent,
                     regime=step.regime,
                     reward=step.reward,
@@ -261,12 +290,24 @@ class MultiAgentTrainer:
                     validation_selection_score=validation_selection_score,
                 )
             )
+        candidate_record_summaries = (
+            tuple(self.manager.generated_candidate_records())
+            if hasattr(self.manager, "generated_candidate_records")
+            else tuple(
+                FormulaCandidate(formula=formula, source="episode_formula", role=None)
+                for formula in seen_candidates
+            )
+        )
+        if candidate_record_summaries:
+            seen_candidates = [item.formula for item in candidate_record_summaries]
         return MultiAgentTrainingSummary(
             history=history,
             best_validation_pool_score=best_validation_pool_score,
             best_validation_selection_score=best_validation_selection_score,
             champion_records=champion_records,
             final_records=tuple(" ".join(record.tokens) for record in pool.records),
+            candidate_records=tuple(seen_candidates),
+            candidate_record_summaries=tuple(candidate_record_summaries),
             final_pool_size=len(pool),
             champion_record_summaries=champion_record_summaries,
             final_record_summaries=_snapshot_pool(pool.records),

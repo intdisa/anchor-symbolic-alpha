@@ -33,7 +33,7 @@ def _datewise_corr(frame: pd.DataFrame, method: str) -> pd.Series:
             right = right.rank()
         return float(left.corr(right, method="pearson"))
 
-    return frame.groupby("date", sort=True).apply(corr_for_group)
+    return frame.groupby("date", sort=True)[["signal", "target"]].apply(corr_for_group)
 
 
 def cross_sectional_rank_ic(signal: pd.Series, target: pd.Series, dates: pd.Series) -> float:
@@ -94,7 +94,7 @@ def cross_sectional_weights(
             weights.loc[short_mask] = -0.5 / short_count
         return weights
 
-    weights = frame.groupby("date", sort=True, group_keys=False).apply(build_weights)
+    weights = frame.groupby("date", sort=True, group_keys=False)[["signal"]].apply(build_weights)
     weights = weights.reindex(signal.index).fillna(0.0)
     return weights
 

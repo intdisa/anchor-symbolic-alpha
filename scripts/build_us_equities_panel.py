@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from knowledge_guided_symbolic_alpha.dataio.us_equities_panel import build_us_equities_panel
+from knowledge_guided_symbolic_alpha.runtime import ensure_preflight
 
 
 DEFAULT_PANEL_OUTPUT = Path("data/processed/us_equities/us_equities_panel.parquet")
@@ -29,6 +30,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    ensure_preflight("core")
     bundle = build_us_equities_panel(raw_root=args.raw_root, config_path=args.config_path)
 
     panel_output = Path(args.panel_output)

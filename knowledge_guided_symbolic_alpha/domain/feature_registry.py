@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from .unit_system import Unit
 
@@ -37,59 +38,7 @@ def _feature(
     )
 
 
-def _asset_features(prefix: str) -> dict[str, FeatureSpec]:
-    return {
-        f"{prefix}_CLOSE": _feature(f"{prefix}_CLOSE", "price", Unit.PRICE, is_macro=False, is_micro=True),
-        f"{prefix}_OPEN": _feature(f"{prefix}_OPEN", "price", Unit.PRICE, is_macro=False, is_micro=True),
-        f"{prefix}_HIGH": _feature(f"{prefix}_HIGH", "price", Unit.PRICE, is_macro=False, is_micro=True),
-        f"{prefix}_LOW": _feature(f"{prefix}_LOW", "price", Unit.PRICE, is_macro=False, is_micro=True),
-        f"{prefix}_VOLUME": _feature(f"{prefix}_VOLUME", "volume", Unit.VOLUME, is_macro=False, is_micro=True),
-        f"{prefix}_HL_SPREAD": _feature(
-            f"{prefix}_HL_SPREAD",
-            "range",
-            Unit.DIMENSIONLESS,
-            is_macro=False,
-            is_micro=True,
-        ),
-        f"{prefix}_OC_RET": _feature(
-            f"{prefix}_OC_RET",
-            "intraday_return",
-            Unit.DIMENSIONLESS,
-            is_macro=False,
-            is_micro=True,
-        ),
-        f"{prefix}_GAP_RET": _feature(
-            f"{prefix}_GAP_RET",
-            "gap_return",
-            Unit.DIMENSIONLESS,
-            is_macro=False,
-            is_micro=True,
-        ),
-        f"{prefix}_REALIZED_VOL_5": _feature(
-            f"{prefix}_REALIZED_VOL_5",
-            "realized_volatility",
-            Unit.DIMENSIONLESS,
-            is_macro=False,
-            is_micro=True,
-        ),
-        f"{prefix}_REALIZED_VOL_20": _feature(
-            f"{prefix}_REALIZED_VOL_20",
-            "realized_volatility",
-            Unit.DIMENSIONLESS,
-            is_macro=False,
-            is_micro=True,
-        ),
-        f"{prefix}_VOLUME_ZSCORE_20": _feature(
-            f"{prefix}_VOLUME_ZSCORE_20",
-            "volume_anomaly",
-            Unit.DIMENSIONLESS,
-            is_macro=False,
-            is_micro=True,
-        ),
-    }
-
-
-def _route_b_panel_features() -> dict[str, FeatureSpec]:
+def _us_equities_panel_features() -> dict[str, FeatureSpec]:
     specs = {
         "RET_1": ("return_1d", Unit.DIMENSIONLESS),
         "RET_5": ("return_5d", Unit.DIMENSIONLESS),
@@ -117,10 +66,7 @@ def _route_b_panel_features() -> dict[str, FeatureSpec]:
 
 
 FEATURE_REGISTRY: dict[str, FeatureSpec] = {
-    **_asset_features("GOLD"),
-    **_asset_features("CRUDE_OIL"),
-    **_asset_features("SP500"),
-    **_route_b_panel_features(),
+    **_us_equities_panel_features(),
     "CPI": _feature(
         "CPI",
         "inflation",
@@ -155,9 +101,31 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     ),
 }
 
+_GENERIC_BENCHMARK_FEATURE_RE = re.compile(r"X\d+$")
+
+
+def is_generic_benchmark_feature(name: str) -> bool:
+    return bool(_GENERIC_BENCHMARK_FEATURE_RE.fullmatch(name))
+
+
+def make_generic_benchmark_feature(name: str) -> FeatureSpec:
+    if not is_generic_benchmark_feature(name):
+        raise KeyError(f"Unknown feature {name!r}.")
+    return _feature(
+        name,
+        "benchmark_generic",
+        Unit.DIMENSIONLESS,
+        frequency="generic",
+        is_macro=False,
+        is_micro=True,
+        requires_delay=False,
+    )
+
 
 def get_feature(name: str) -> FeatureSpec:
     try:
         return FEATURE_REGISTRY[name]
     except KeyError as exc:
+        if is_generic_benchmark_feature(name):
+            return make_generic_benchmark_feature(name)
         raise KeyError(f"Unknown feature {name!r}.") from exc

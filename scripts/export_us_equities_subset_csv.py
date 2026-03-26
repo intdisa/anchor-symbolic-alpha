@@ -3,8 +3,14 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
 
-import duckdb
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from knowledge_guided_symbolic_alpha.runtime import ensure_preflight
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,6 +27,12 @@ def sql_path(path: Path) -> str:
 
 def main() -> None:
     args = parse_args()
+    ensure_preflight("eval")
+    try:
+        import duckdb
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("`duckdb` is required for csv export. Install the `eval` dependency tier first.") from exc
+
     subset_root = Path(args.subset_root)
     con = duckdb.connect()
     con.execute(f"SET memory_limit='{args.memory_limit}'")

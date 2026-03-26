@@ -32,8 +32,8 @@ class LibraryPlanner:
         price_strength = state.dataset_embedding[6] if len(state.dataset_embedding) > 6 else 0.0
         high_vol = 1.0 if state.regime == "HIGH_VOLATILITY" else 0.0
         usd_strength = 1.0 if state.regime == "USD_STRENGTH" else 0.0
-        route_b_slow_skills = ("quality_solvency", "efficiency_growth", "valuation_size")
-        occupied_route_b_slow = tuple(skill for skill in route_b_slow_skills if skill in state.occupied_skills)
+        us_equities_slow_skills = ("quality_solvency", "efficiency_growth", "valuation_size")
+        occupied_us_equities_slow = tuple(skill for skill in us_equities_slow_skills if skill in state.occupied_skills)
 
         skill_scores: dict[str, float] = {}
         for skill in self.skill_names:
@@ -42,7 +42,7 @@ class LibraryPlanner:
                 score += 0.35
             if skill in state.occupied_skills:
                 score -= 0.08
-            if state.dataset_name == "route_b" and state.pool_size == 0:
+            if state.dataset_name == "us_equities" and state.pool_size == 0:
                 if skill == "quality_solvency":
                     score += 0.32
                 elif skill == "efficiency_growth":
@@ -75,7 +75,7 @@ class LibraryPlanner:
                 score += 0.45 * high_vol + 0.20 * usd_strength + 0.15 * state.redundancy
             if state.pool_size >= state.max_pool_size:
                 score += 0.05
-            if state.dataset_name == "route_b":
+            if state.dataset_name == "us_equities":
                 if (
                     skill == "efficiency_growth"
                     and "quality_solvency" in state.occupied_skills
@@ -90,17 +90,17 @@ class LibraryPlanner:
                     score += 0.10 + 0.05 * max(0.0, state.pool_trade_proxy)
                 if (
                     skill in {"efficiency_growth", "valuation_size"}
-                    and len(occupied_route_b_slow) == 1
+                    and len(occupied_us_equities_slow) == 1
                     and skill in state.missing_skills
                 ):
                     score += 0.12
                 if (
                     skill == "short_horizon_flow"
-                    and any(parent in state.occupied_skills for parent in route_b_slow_skills)
+                    and any(parent in state.occupied_skills for parent in us_equities_slow_skills)
                     and "short_horizon_flow" in state.missing_skills
                 ):
                     score += 0.06 + 0.05 * max(0.0, state.validation_pool_score)
-                if skill == "short_horizon_flow" and 0 < len(occupied_route_b_slow) < 2:
+                if skill == "short_horizon_flow" and 0 < len(occupied_us_equities_slow) < 2:
                     score -= 0.22
             else:
                 if (
@@ -125,7 +125,7 @@ class LibraryPlanner:
                 reverse=True,
             )
         )
-        stage_eligible = self._route_b_stage_eligible_skills(state)
+        stage_eligible = self._us_equities_stage_eligible_skills(state)
         if stage_eligible is not None:
             ranked_skills = tuple(skill for skill in ranked_skills if skill in stage_eligible)
         ordered_skills = ranked_skills[: self.max_shortlist]
@@ -143,8 +143,8 @@ class LibraryPlanner:
             skill_scores=skill_scores,
         )
 
-    def _route_b_stage_eligible_skills(self, state: CommonKnowledgeState) -> tuple[str, ...] | None:
-        if state.dataset_name != "route_b":
+    def _us_equities_stage_eligible_skills(self, state: CommonKnowledgeState) -> tuple[str, ...] | None:
+        if state.dataset_name != "us_equities":
             return None
         slow_skills = tuple(
             skill
@@ -177,7 +177,7 @@ class LibraryPlanner:
         pair = ("short_horizon_flow", "price_structure")
         if not all(skill in self.skill_names for skill in pair):
             return ordered_skills
-        if state.dataset_name == "route_b" and state.pool_size == 0:
+        if state.dataset_name == "us_equities" and state.pool_size == 0:
             return ordered_skills
         if any(skill in state.occupied_skills for skill in pair):
             return ordered_skills
