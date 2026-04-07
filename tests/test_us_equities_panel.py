@@ -58,6 +58,11 @@ def _make_us_equities_tables() -> dict[str, pd.DataFrame]:
             {"gvkey": "002000", "lpermno": 10002, "linkdt": pd.Timestamp("2010-01-01"), "linkenddt": pd.NaT, "linktype": "LC", "linkprim": "P"},
         ]
     )
+    crsp_delisting = pd.DataFrame(
+        [
+            {"permno": 10001, "dlstdt": dates[40], "dlret": -0.5, "dlstcd": 500},
+        ]
+    )
     compustat_quarterly = pd.DataFrame(
         [
             {"gvkey": "001000", "datadate": pd.Timestamp("2019-12-31"), "rdq": pd.Timestamp("2020-02-15"), "fyearq": 2019, "fqtr": 4, "atq": 500.0, "ltq": 200.0, "ceqq": 300.0, "seq": 300.0, "saleq": 150.0, "niq": 15.0, "oiadpq": 20.0, "cheq": 60.0, "dlcq": 20.0, "dlttq": 40.0, "actq": 80.0, "lctq": 50.0, "rectq": 25.0, "invtq": 20.0, "cogsq": 70.0, "xsgaq": 15.0},
@@ -76,6 +81,7 @@ def _make_us_equities_tables() -> dict[str, pd.DataFrame]:
         "ccm_link": ccm_link,
         "compustat_quarterly": compustat_quarterly,
         "compustat_annual": compustat_annual,
+        "crsp_delisting": crsp_delisting,
     }
 
 
@@ -97,6 +103,22 @@ def test_build_panel_from_tables_generates_cross_sectional_targets() -> None:
     assert {"RET_20", "BOOK_TO_MARKET_Q", "PROFITABILITY_A", "TARGET_RET_1", "TARGET_XS_RET_1"}.issubset(panel.columns)
     by_date_mean = panel.groupby("date")["TARGET_XS_RET_1"].mean().abs().max()
     assert by_date_mean < 1e-10
+    trigger_date = pd.bdate_range("2020-01-01", periods=80)[40]
+    previous_date = pd.bdate_range("2020-01-01", periods=80)[39]
+    trigger_ret = tables["crsp_daily"].loc[
+        (tables["crsp_daily"]["permno"] == 10001) & (tables["crsp_daily"]["date"] == trigger_date),
+        "ret",
+    ].iloc[0]
+    trigger_dlret = tables["crsp_delisting"].loc[
+        (tables["crsp_delisting"]["permno"] == 10001) & (tables["crsp_delisting"]["dlstdt"] == trigger_date),
+        "dlret",
+    ].iloc[0]
+    expected_total = (1.0 + trigger_ret) * (1.0 + trigger_dlret) - 1.0
+    realized_target = panel.loc[
+        (panel["permno"] == 10001) & (panel["date"] == previous_date),
+        "TARGET_RET_1",
+    ].iloc[0]
+    assert realized_target == pytest.approx(expected_total)
 
 
 def test_us_equities_raw_table_loader_reads_expected_files(tmp_path: Path) -> None:
@@ -107,6 +129,7 @@ def test_us_equities_raw_table_loader_reads_expected_files(tmp_path: Path) -> No
     _write_csv_gz(tables["ccm_link"], root / "wrds" / "ccm_link.csv.gz")
     _write_csv_gz(tables["compustat_quarterly"], root / "wrds" / "compustat_quarterly.csv.gz")
     _write_csv_gz(tables["compustat_annual"], root / "wrds" / "compustat_annual.csv.gz")
+    _write_csv_gz(tables["crsp_delisting"], root / "wrds" / "crsp_delisting.csv.gz")
 
     loaded = load_us_equities_raw_tables(root)
 
@@ -127,6 +150,7 @@ def test_build_us_equities_panel_creates_non_empty_splits(tmp_path: Path) -> Non
     _write_csv_gz(tables["ccm_link"], root / "wrds" / "ccm_link.csv.gz")
     _write_csv_gz(tables["compustat_quarterly"], root / "wrds" / "compustat_quarterly.csv.gz")
     _write_csv_gz(tables["compustat_annual"], root / "wrds" / "compustat_annual.csv.gz")
+    _write_csv_gz(tables["crsp_delisting"], root / "wrds" / "crsp_delisting.csv.gz")
 
     config_path = tmp_path / "us_equities_panel.yaml"
     config_path.write_text(

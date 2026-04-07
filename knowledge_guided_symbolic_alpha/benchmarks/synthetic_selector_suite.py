@@ -12,6 +12,9 @@ SYNTHETIC_SCENARIOS = (
     "regime_sign_flip",
     "noise_variance_shift",
     "near_neighbor_ambiguity",
+    "adversarial_support_lockin",
+    "heavy_tail_outlier_shift",
+    "support_lockin_recovery",
 )
 
 
@@ -39,6 +42,15 @@ def generate_synthetic_selector_task(
     elif scenario == "noise_variance_shift":
         true_formula = "X0 X1 MUL"
         candidate_formulas = ("X0 X1 MUL", "X0 X2 MUL", "X4 NEG", "X0 X1 ADD", "X0 X1 MUL X3 ADD")
+    elif scenario == "adversarial_support_lockin":
+        true_formula = "X0 X1 ADD"
+        candidate_formulas = ("X0 X1 ADD", "X0 X2 ADD", "X4 NEG", "X0 X1 SUB", "X0 X2 ADD X3 ADD")
+    elif scenario == "heavy_tail_outlier_shift":
+        true_formula = "X0 X1 ADD"
+        candidate_formulas = ("X0 X1 ADD", "X0 X2 ADD", "X4 NEG", "X0 X1 SUB", "X0 X1 ADD X3 ADD")
+    elif scenario == "support_lockin_recovery":
+        true_formula = "X0 X1 MUL"
+        candidate_formulas = ("X0 X1 MUL", "X0 X2 MUL", "X4 NEG", "X0 X1 ADD", "X0 X2 MUL X3 ADD")
     else:
         true_formula = "X0 X1 DIV"
         candidate_formulas = ("X0 X1 DIV", "X0 X2 DIV", "X4 NEG", "X0 X1 DIV X3 ADD", "X0 X2 DIV X3 ADD")
@@ -55,6 +67,31 @@ def generate_synthetic_selector_task(
                     x2 = x1 * (0.94 + rng.normal(scale=0.09))
                 else:
                     x2 = x1 * (0.55 + rng.normal(scale=0.18))
+            elif scenario == "adversarial_support_lockin":
+                x0 = float(rng.normal())
+                x1 = float(rng.normal(loc=0.10 * np.sin(offset / 11.0), scale=1.0))
+                if env_name in {"env_a", "env_b", "env_c"}:
+                    x2 = 1.03 * x1 + rng.normal(scale=0.05)
+                else:
+                    x2 = -0.20 * x1 + rng.normal(scale=1.20)
+            elif scenario == "heavy_tail_outlier_shift":
+                x0 = float(rng.standard_t(df=5))
+                x1 = float(rng.standard_t(df=6) + 0.10 * np.cos(offset / 8.0))
+                if env_name in {"env_a", "env_b"}:
+                    x2 = 0.98 * x1 + rng.standard_t(df=5) * 0.08
+                elif env_name == "env_c":
+                    x2 = 0.70 * x1 + rng.standard_t(df=4) * 0.25
+                else:
+                    x2 = 0.25 * x1 + rng.standard_t(df=3) * 0.60
+            elif scenario == "support_lockin_recovery":
+                x0 = float(rng.normal(loc=0.05 * np.sin(offset / 7.0), scale=1.0))
+                x1 = float(rng.normal(loc=0.10 * np.cos(offset / 6.0), scale=1.0))
+                if env_name in {"env_a", "env_b"}:
+                    x2 = 1.04 * x1 + rng.normal(scale=0.04)
+                elif env_name == "env_c":
+                    x2 = 0.85 * x1 + rng.normal(scale=0.22)
+                else:
+                    x2 = -0.10 * x1 + rng.normal(scale=0.95)
             else:
                 x0 = float(rng.normal())
                 x1 = float(rng.normal(loc=0.15 * np.cos(offset / 9.0), scale=1.0))
@@ -78,6 +115,36 @@ def generate_synthetic_selector_task(
                 neighbor_scale = 0.90 if env_name in {"env_a", "env_b"} else 0.20
                 noise_scale = 0.05 if env_name in {"env_a", "env_b"} else (0.18 if env_name == "env_c" else 0.30)
                 target = stable_signal + neighbor_scale * neighbor_signal + 0.35 * x4 + rng.normal(scale=noise_scale)
+            elif scenario == "adversarial_support_lockin":
+                stable_signal = x0 + x1
+                misleading_signal = x0 + x2
+                if env_name in {"env_a", "env_b"}:
+                    target = 0.75 * stable_signal + 1.10 * misleading_signal + 0.10 * x3 + rng.normal(scale=0.08)
+                elif env_name == "env_c":
+                    target = 0.80 * stable_signal + 0.95 * misleading_signal + 0.10 * x3 + rng.normal(scale=0.10)
+                else:
+                    target = 1.15 * stable_signal - 0.35 * misleading_signal + 0.12 * x3 + rng.normal(scale=0.14)
+            elif scenario == "heavy_tail_outlier_shift":
+                stable_signal = x0 + x1
+                neighbor_signal = x0 + x2
+                outlier_scale = 0.15 if env_name in {"env_a", "env_b"} else (0.35 if env_name == "env_c" else 0.80)
+                rare_outlier = (rng.random() < (0.01 if env_name != "env_d" else 0.06)) * rng.standard_t(df=2) * 3.0
+                target = (
+                    1.05 * stable_signal
+                    + (0.85 if env_name in {"env_a", "env_b"} else (0.40 if env_name == "env_c" else -0.10)) * neighbor_signal
+                    + outlier_scale * x4
+                    + rare_outlier
+                    + rng.normal(scale=0.10 if env_name != "env_d" else 0.22)
+                )
+            elif scenario == "support_lockin_recovery":
+                stable_signal = x0 * x1
+                misleading_signal = x0 * x2
+                if env_name in {"env_a", "env_b"}:
+                    target = 0.45 * stable_signal + 1.05 * misleading_signal + 0.08 * x3 + rng.normal(scale=0.08)
+                elif env_name == "env_c":
+                    target = 0.80 * stable_signal + 0.65 * misleading_signal + 0.10 * x3 + rng.normal(scale=0.10)
+                else:
+                    target = 1.25 * stable_signal - 0.10 * misleading_signal + 0.12 * x3 + rng.normal(scale=0.12)
             else:
                 denominator = np.clip(np.abs(x1), 0.2, None)
                 stable_signal = x0 / denominator

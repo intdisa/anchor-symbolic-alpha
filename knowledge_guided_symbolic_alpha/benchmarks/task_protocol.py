@@ -7,13 +7,16 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LassoCV
 
 from ..evaluation.panel_dispatch import evaluate_formula_metrics
 from ..generation import FormulaCandidate
 from ..selection import (
     CrossSeedConsensusConfig,
+    CrossSeedConsensusOutcome,
     CrossSeedConsensusSelector,
     CrossSeedSelectionRun,
+    RobustSelectorConfig,
     TemporalRobustSelector,
 )
 from ..selection.cross_seed_selector import mean_score_consensus_formula
@@ -68,6 +71,10 @@ class BenchmarkTaskResult:
     true_formula: str
     baselines: dict[str, BenchmarkBaselineAggregate]
     seed_level_results: dict[str, list[SeedBaselineResult]]
+
+
+def formula_complexity(formula: str) -> int:
+    return max(1, len(str(formula).split()))
 
 
 def selector_split(task: SelectorBenchmarkTask) -> tuple[pd.DataFrame, pd.Series]:
@@ -139,6 +146,112 @@ def select_best_formula_by_mean_slice_rank_ic(
             best_formula = candidate.formula
             best_value = value
     return best_formula
+
+
+def select_formula_by_pareto_front(
+    candidates: list[FormulaCandidate],
+    frame: pd.DataFrame,
+    target: pd.Series,
+    slice_count: int = 4,
+) -> str:
+    frontier: list[dict[str, float | str]] = []
+    scored: list[dict[str, float | str]] = []
+    for candidate in candidates:
+        score = mean_slice_rank_ic(candidate.formula, frame, target, slice_count=slice_count)
+        if not np.isfinite(score):
+            continue
+        scored.append(
+            {
+                "formula": candidate.formula,
+                "score": float(score),
+                "complexity": float(formula_complexity(candidate.formula)),
+            }
+        )
+    if not scored:
+        return ""
+    for item in scored:
+        dominated = False
+        for other in scored:
+            if other is item:
+                continue
+            better_or_equal = other["score"] >= item["score"] and other["complexity"] <= item["complexity"]
+            strictly_better = other["score"] > item["score"] or other["complexity"] < item["complexity"]
+            if better_or_equal and strictly_better:
+                dominated = True
+                break
+        if not dominated:
+            frontier.append(item)
+    frontier.sort(key=lambda item: (item["complexity"], item["score"]))
+    if len(frontier) == 1:
+        return str(frontier[0]["formula"])
+
+    complexities = np.array([float(item["complexity"]) for item in frontier], dtype=float)
+    scores = np.array([float(item["score"]) for item in frontier], dtype=float)
+    comp_scale = max(complexities.max() - complexities.min(), 1.0)
+    score_scale = max(scores.max() - scores.min(), 1e-12)
+    xs = (complexities - complexities.min()) / comp_scale
+    ys = (scores - scores.min()) / score_scale
+    start = np.array([xs[0], ys[0]], dtype=float)
+    end = np.array([xs[-1], ys[-1]], dtype=float)
+    line = end - start
+    line_norm = float(np.linalg.norm(line))
+    if line_norm <= 1e-12:
+        return str(max(frontier, key=lambda item: (item["score"], -item["complexity"]))["formula"])
+    best_formula = str(frontier[-1]["formula"])
+    best_distance = float("-inf")
+    for item, x, y in zip(frontier, xs, ys):
+        point = np.array([x, y], dtype=float)
+        relative = point - start
+        cross_2d = line[0] * relative[1] - line[1] * relative[0]
+        distance = float(abs(cross_2d) / line_norm)
+        tie_break = float(item["score"]) - 1e-3 * float(item["complexity"])
+        if distance > best_distance or (np.isclose(distance, best_distance) and tie_break > 0):
+            best_distance = distance
+            best_formula = str(item["formula"])
+    return best_formula
+
+
+def select_formula_by_lasso_screening(
+    candidates: list[FormulaCandidate],
+    frame: pd.DataFrame,
+    target: pd.Series,
+) -> str:
+    if not candidates:
+        return ""
+    signals: list[pd.Series] = []
+    formulas: list[str] = []
+    for candidate in candidates:
+        try:
+            evaluated = evaluate_formula_metrics(candidate.formula, frame, target).evaluated
+        except Exception:
+            continue
+        signal = pd.Series(evaluated.signal, index=frame.index, dtype=float).replace([np.inf, -np.inf], np.nan)
+        if signal.isna().all():
+            continue
+        signals.append(signal.fillna(signal.median()))
+        formulas.append(candidate.formula)
+    if not signals:
+        return ""
+    if len(signals) == 1:
+        return formulas[0]
+    design = pd.concat(signals, axis=1)
+    design.columns = formulas
+    values = design.to_numpy(dtype=float)
+    values = values - values.mean(axis=0, keepdims=True)
+    std = values.std(axis=0, ddof=0, keepdims=True)
+    std[std < 1e-12] = 1.0
+    values = values / std
+    response = pd.Series(target, index=frame.index, dtype=float).fillna(float(pd.Series(target).median())).to_numpy(dtype=float)
+    try:
+        fit = LassoCV(cv=3, random_state=0, max_iter=10000).fit(values, response)
+        coefs = np.abs(fit.coef_)
+        if np.any(coefs > 1e-10):
+            return formulas[int(np.argmax(coefs))]
+    except Exception:
+        pass
+    correlations = np.abs(np.corrcoef(values, response, rowvar=False)[-1, :-1])
+    correlations = np.nan_to_num(correlations, nan=-1.0, posinf=-1.0, neginf=-1.0)
+    return formulas[int(np.argmax(correlations))]
 
 
 def build_seed_run(
@@ -223,10 +336,26 @@ def run_task_benchmark(
 ) -> BenchmarkTaskResult:
     if not tasks:
         raise ValueError("At least one task instance is required.")
-    temporal_selector = temporal_selector or TemporalRobustSelector()
+    temporal_selector = temporal_selector or TemporalRobustSelector(
+        RobustSelectorConfig(selection_mode="pareto")
+    )
+    discrete_temporal_selector = TemporalRobustSelector(
+        RobustSelectorConfig(selection_mode="pareto_discrete_legacy")
+    )
+    legacy_temporal_selector = TemporalRobustSelector(
+        RobustSelectorConfig(selection_mode="legacy_linear")
+    )
     consensus_selector = consensus_selector or CrossSeedConsensusSelector(
         temporal_selector=temporal_selector,
-        config=CrossSeedConsensusConfig(rerank_mode="support_only"),
+        config=CrossSeedConsensusConfig(selection_mode="pareto", rerank_mode="shared_frame"),
+    )
+    discrete_consensus_selector = CrossSeedConsensusSelector(
+        temporal_selector=discrete_temporal_selector,
+        config=CrossSeedConsensusConfig(selection_mode="pareto_discrete_legacy", rerank_mode="shared_frame"),
+    )
+    legacy_consensus_selector = CrossSeedConsensusSelector(
+        temporal_selector=legacy_temporal_selector,
+        config=CrossSeedConsensusConfig(selection_mode="legacy_linear", rerank_mode="shared_frame"),
     )
     benchmark_name = tasks[0].benchmark_name
     task_id = tasks[0].task_id
@@ -237,9 +366,15 @@ def run_task_benchmark(
         "naive_rank_ic": [],
         "best_validation_sharpe": [],
         "best_validation_mean_rank_ic": [],
+        "pareto_front_selector": [],
+        "lasso_formula_screening": [],
         "single_seed_temporal_selector": [],
+        "pareto_discrete_temporal_selector": [],
+        "legacy_linear_temporal_selector": [],
     }
-    seed_runs: list[CrossSeedSelectionRun] = []
+    pareto_seed_runs: list[CrossSeedSelectionRun] = []
+    discrete_seed_runs: list[CrossSeedSelectionRun] = []
+    legacy_seed_runs: list[CrossSeedSelectionRun] = []
     base_candidates = tasks[0].candidate_formulas
 
     for task in tasks:
@@ -250,10 +385,18 @@ def run_task_benchmark(
             "naive_rank_ic": select_best_formula_by_metric(task.candidate_formulas, sel_frame, sel_target, "rank_ic"),
             "best_validation_sharpe": select_best_formula_by_metric(task.candidate_formulas, sel_frame, sel_target, "sharpe"),
             "best_validation_mean_rank_ic": select_best_formula_by_mean_slice_rank_ic(task.candidate_formulas, sel_frame, sel_target),
+            "pareto_front_selector": select_formula_by_pareto_front(task.candidate_formulas, sel_frame, sel_target),
+            "lasso_formula_screening": select_formula_by_lasso_screening(task.candidate_formulas, sel_frame, sel_target),
         }
-        seed_run, temporal_records, temporal_formula = build_seed_run(task, temporal_selector)
-        seed_runs.append(seed_run)
-        baseline_choices["single_seed_temporal_selector"] = temporal_formula
+        pareto_seed_run, _, pareto_temporal_formula = build_seed_run(task, temporal_selector)
+        discrete_seed_run, _, discrete_temporal_formula = build_seed_run(task, discrete_temporal_selector)
+        legacy_seed_run, _, legacy_temporal_formula = build_seed_run(task, legacy_temporal_selector)
+        pareto_seed_runs.append(pareto_seed_run)
+        discrete_seed_runs.append(discrete_seed_run)
+        legacy_seed_runs.append(legacy_seed_run)
+        baseline_choices["single_seed_temporal_selector"] = pareto_temporal_formula
+        baseline_choices["pareto_discrete_temporal_selector"] = discrete_temporal_formula
+        baseline_choices["legacy_linear_temporal_selector"] = legacy_temporal_formula
 
         for baseline, formula in baseline_choices.items():
             metrics = evaluate_formula_metrics(formula, tst_frame, tst_target).metrics if formula else {}
@@ -273,57 +416,105 @@ def run_task_benchmark(
             )
 
     baselines: dict[str, BenchmarkBaselineAggregate] = {}
+    oracle_metrics = [evaluate_formula_on_task(true_formula, task, split="test") for task in tasks]
     for baseline, results in seed_level_results.items():
         baselines[baseline] = aggregate_seed_baseline(
             baseline,
             [item.selected_formula for item in results],
             [item.test_metrics for item in results],
             true_formula,
-            [evaluate_formula_on_task(true_formula, task, split="test") for task in tasks],
+            oracle_metrics,
         )
 
     selector_stack_frame, selector_stack_target = stacked_split(tasks, split="selector")
-    consensus_outcome = consensus_selector.select(seed_runs, selector_stack_frame, selector_stack_target, base_candidates=base_candidates)
-    support_formula = consensus_outcome.selected_formulas[0] if consensus_outcome.selected_formulas else ""
-    mean_score_formula = mean_score_consensus_formula(seed_runs)
+    pareto_outcome = consensus_selector.select(
+        pareto_seed_runs,
+        selector_stack_frame,
+        selector_stack_target,
+        base_candidates=base_candidates,
+    )
+    legacy_outcome = legacy_consensus_selector.select(
+        legacy_seed_runs,
+        selector_stack_frame,
+        selector_stack_target,
+        base_candidates=base_candidates,
+    )
+    discrete_outcome = discrete_consensus_selector.select(
+        discrete_seed_runs,
+        selector_stack_frame,
+        selector_stack_target,
+        base_candidates=base_candidates,
+    )
+    mean_score_formula = mean_score_consensus_formula(pareto_seed_runs)
 
-    consensus_metrics = [evaluate_formula_on_task(support_formula, task, split="test") for task in tasks] if support_formula else [{} for _ in tasks]
-    mean_score_metrics = [evaluate_formula_on_task(mean_score_formula, task, split="test") for task in tasks] if mean_score_formula else [{} for _ in tasks]
-    oracle_metrics = [evaluate_formula_on_task(true_formula, task, split="test") for task in tasks]
+    def _consensus_payload(name: str, formula: str, outcome: CrossSeedConsensusOutcome) -> BenchmarkBaselineAggregate:
+        metrics = [evaluate_formula_on_task(formula, task, split="test") for task in tasks] if formula else [{} for _ in tasks]
+        support_payload = outcome.formula_support.get(formula, {}) if formula else {}
+        return aggregate_seed_baseline(
+            name,
+            [formula] * len(tasks),
+            metrics,
+            true_formula,
+            oracle_metrics,
+            support_fraction=float(support_payload.get("candidate_seed_support", 0) / max(len(tasks), 1)),
+            diagnostics={
+                "selected_formula": formula,
+                "candidate_pool_size": len(outcome.candidate_pool),
+                "first_front_size": max(
+                    (int(record.consensus_front_size or 0) for record in outcome.ranked_records if int(record.consensus_pareto_rank or 999) == 1),
+                    default=0,
+                ),
+                "first_front_share": max(
+                    (float(record.consensus_front_share or 0.0) for record in outcome.ranked_records if int(record.consensus_pareto_rank or 999) == 1),
+                    default=0.0,
+                ),
+                "selected_crowding_distance": next(
+                    (
+                        float(record.consensus_crowding_distance)
+                        for record in outcome.ranked_records
+                        if record.formula == formula and record.consensus_crowding_distance is not None
+                    ),
+                    None,
+                ),
+                "used_near_neighbor_tiebreak": any(bool(record.used_near_neighbor_tiebreak) for record in outcome.ranked_records),
+                "ranked_records": [
+                    {
+                        "formula": record.formula,
+                        "support_adjusted_score": record.support_adjusted_score,
+                        "mean_temporal_score": record.mean_temporal_score,
+                        "candidate_seed_support": record.candidate_seed_support,
+                        "selector_seed_support": record.selector_seed_support,
+                        "champion_seed_support": record.champion_seed_support,
+                        "mean_selector_rank": record.mean_selector_rank,
+                        "consensus_pareto_rank": record.consensus_pareto_rank,
+                        "consensus_tiebreak_rank": record.consensus_tiebreak_rank,
+                        "consensus_front_size": record.consensus_front_size,
+                        "consensus_front_share": record.consensus_front_share,
+                        "consensus_crowding_distance": record.consensus_crowding_distance,
+                        "used_near_neighbor_tiebreak": record.used_near_neighbor_tiebreak,
+                    }
+                    for record in outcome.ranked_records
+                ],
+            },
+        )
 
-    support_payload = consensus_outcome.formula_support.get(support_formula, {}) if support_formula else {}
-    mean_score_support = summarize_formula_support_for_formula(seed_runs, mean_score_formula)
     baselines["cross_seed_mean_score_consensus"] = aggregate_seed_baseline(
         "cross_seed_mean_score_consensus",
         [mean_score_formula] * len(tasks),
-        mean_score_metrics,
+        [evaluate_formula_on_task(mean_score_formula, task, split="test") for task in tasks] if mean_score_formula else [{} for _ in tasks],
         true_formula,
         oracle_metrics,
-        support_fraction=float(mean_score_support / max(len(tasks), 1)),
+        support_fraction=float(summarize_formula_support_for_formula(pareto_seed_runs, mean_score_formula) / max(len(tasks), 1)),
         diagnostics={"selected_formula": mean_score_formula},
     )
-    baselines["support_adjusted_cross_seed_consensus"] = aggregate_seed_baseline(
-        "support_adjusted_cross_seed_consensus",
-        [support_formula] * len(tasks),
-        consensus_metrics,
-        true_formula,
-        oracle_metrics,
-        support_fraction=float(support_payload.get("candidate_seed_support", 0) / max(len(tasks), 1)),
-        diagnostics={
-            "selected_formula": support_formula,
-            "candidate_pool_size": len(consensus_outcome.candidate_pool),
-            "support_adjusted_ranked_records": [
-                {
-                    "formula": record.formula,
-                    "support_adjusted_score": record.support_adjusted_score,
-                    "candidate_seed_support": record.candidate_seed_support,
-                    "selector_seed_support": record.selector_seed_support,
-                    "champion_seed_support": record.champion_seed_support,
-                }
-                for record in consensus_outcome.ranked_records
-            ],
-        },
-    )
+    pareto_formula = pareto_outcome.selected_formulas[0] if pareto_outcome.selected_formulas else ""
+    discrete_formula = discrete_outcome.selected_formulas[0] if discrete_outcome.selected_formulas else ""
+    legacy_formula = legacy_outcome.selected_formulas[0] if legacy_outcome.selected_formulas else ""
+    baselines["pareto_cross_seed_consensus"] = _consensus_payload("pareto_cross_seed_consensus", pareto_formula, pareto_outcome)
+    baselines["pareto_discrete_legacy"] = _consensus_payload("pareto_discrete_legacy", discrete_formula, discrete_outcome)
+    baselines["legacy_linear_selector"] = _consensus_payload("legacy_linear_selector", legacy_formula, legacy_outcome)
+    baselines["support_adjusted_cross_seed_consensus"] = baselines["legacy_linear_selector"]
+
     return BenchmarkTaskResult(
         benchmark_name=benchmark_name,
         task_id=task_id,
@@ -373,6 +564,40 @@ def suite_leaderboard(task_results: list[BenchmarkTaskResult]) -> list[dict[str,
             }
         )
     rows.sort(key=lambda item: (item["selection_accuracy"], item["mean_test_rank_ic"], item["mean_test_sharpe"]), reverse=True)
+    return rows
+
+
+def suite_stress_summary(task_results: list[BenchmarkTaskResult]) -> list[dict[str, Any]]:
+    baselines = sorted({name for result in task_results for name in result.baselines})
+    rows: list[dict[str, Any]] = []
+    for baseline in baselines:
+        per_task = []
+        failure_boundary_scores = []
+        for result in task_results:
+            payload = result.baselines[baseline]
+            task_row = {
+                "task_id": result.task_id,
+                "scenario": result.scenario,
+                "selection_accuracy": float(payload.selection_accuracy),
+                "misselection_rate": float(payload.misselection_rate),
+            }
+            per_task.append(task_row)
+            if "adversarial" in result.scenario or "stress" in result.scenario or "outlier" in result.scenario:
+                failure_boundary_scores.append(float(payload.selection_accuracy))
+        per_task.sort(key=lambda item: (item["selection_accuracy"], -item["misselection_rate"]))
+        worst = per_task[0] if per_task else {"task_id": None, "scenario": None, "selection_accuracy": None}
+        rows.append(
+            {
+                "baseline": baseline,
+                "task_count": len(per_task),
+                "average_selection_accuracy": float(np.mean([item["selection_accuracy"] for item in per_task])) if per_task else None,
+                "worst_case_accuracy": worst["selection_accuracy"],
+                "worst_case_task_id": worst["task_id"],
+                "worst_case_scenario": worst["scenario"],
+                "failure_boundary_accuracy": float(np.mean(failure_boundary_scores)) if failure_boundary_scores else None,
+            }
+        )
+    rows.sort(key=lambda item: (item["average_selection_accuracy"], item["worst_case_accuracy"]), reverse=True)
     return rows
 
 

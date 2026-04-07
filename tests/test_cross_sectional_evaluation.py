@@ -79,6 +79,8 @@ def test_cross_sectional_risk_summary_builds_long_short_portfolio() -> None:
         panel["date"],
         panel["permno"],
         quantile=0.5,
+        min_long_count=1,
+        min_short_count=1,
     )
 
     assert metrics["annual_return"] != 0.0
@@ -96,6 +98,8 @@ def test_cross_sectional_stability_summary_reports_window_metrics() -> None:
         panel["permno"],
         quantile=0.5,
         window_count=3,
+        min_long_count=1,
+        min_short_count=1,
     )
 
     assert "rank_ic_window_min" in metrics
@@ -118,3 +122,41 @@ def test_panel_dispatch_uses_raw_returns_for_cross_sectional_risk_metrics() -> N
 
     assert scored["annual_return"] == expected["annual_return"]
     assert scored["turnover"] == expected["turnover"]
+
+
+
+def test_cross_sectional_risk_summary_supports_value_weighting() -> None:
+    panel = _make_panel()
+    signal = pd.Series([1, 0, 1, 0, 1, 0, 0, 1, 1, 0], index=panel.index, dtype=float)
+    size_proxy = pd.Series([1, 9, 1, 9, 1, 9, 1, 9, 1, 9], index=panel.index, dtype=float)
+
+    metrics = cross_sectional_risk_summary(
+        signal,
+        panel["TARGET_XS_RET_1"],
+        panel["date"],
+        panel["permno"],
+        quantile=0.5,
+        weight_scheme="value",
+        size_proxy=size_proxy,
+        min_long_count=1,
+        min_short_count=1,
+    )
+
+    assert metrics["annual_return"] != 0.0
+    assert metrics["turnover"] >= 0.0
+
+
+def test_cross_sectional_long_short_fuse_zeros_out_sparse_days() -> None:
+    panel = _make_panel()
+    signal = pd.Series([1, 0, 1, 0, 1, 0, 0, 1, 1, 0], index=panel.index, dtype=float)
+
+    metrics = cross_sectional_risk_summary(
+        signal,
+        panel["TARGET_XS_RET_1"],
+        panel["date"],
+        panel["permno"],
+        quantile=0.2,
+    )
+
+    assert metrics["annual_return"] == 0.0
+    assert metrics["turnover"] == 0.0

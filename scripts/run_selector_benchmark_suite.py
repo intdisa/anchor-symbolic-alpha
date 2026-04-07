@@ -39,6 +39,7 @@ def main() -> None:
         generate_synthetic_selector_task,
         public_symbolic_task_specs,
         run_task_benchmark,
+        suite_stress_summary,
         suite_leaderboard,
         synthetic_selector_scenarios,
     )
@@ -75,6 +76,7 @@ def main() -> None:
 
     results = [run_task_benchmark(tasks) for tasks in task_groups]
     leaderboard = suite_leaderboard(results)
+    stress_summary = suite_stress_summary(results)
     task_payloads = [asdict(result) if is_dataclass(result) else result for result in results]
     suite_payload = {
         "benchmark_name": f"{args.suite}_selector_benchmark_suite",
@@ -83,6 +85,7 @@ def main() -> None:
         "samples_per_env": args.samples_per_env,
         "task_results": task_payloads,
         "leaderboard": leaderboard,
+        "stress_summary": stress_summary,
         "manifest": str(manifest_path),
     }
     task_root = output_dirs["reports"] / "tasks"
@@ -93,17 +96,26 @@ def main() -> None:
     summary_json = output_dirs["reports"] / f"{args.suite}_selector_benchmark_summary.json"
     summary_md = output_dirs["reports"] / f"{args.suite}_selector_benchmark_summary.md"
     leaderboard_csv = output_dirs["reports"] / f"{args.suite}_selector_benchmark_leaderboard.csv"
+    stress_json = output_dirs["reports"] / "selector_benchmark_stress_summary.json"
+    stress_md = output_dirs["reports"] / "selector_benchmark_stress_summary.md"
+    stress_csv = output_dirs["reports"] / "selector_benchmark_stress_summary.csv"
     write_json(summary_json, suite_payload)
     summary_md.write_text(build_markdown(suite_payload) + "\n", encoding="utf-8")
     import pandas as pd
 
     pd.DataFrame(leaderboard).to_csv(leaderboard_csv, index=False)
+    write_json(stress_json, {"suite": args.suite, "stress_summary": stress_summary})
+    stress_md.write_text(build_stress_markdown(args.suite, stress_summary) + "\n", encoding="utf-8")
+    pd.DataFrame(stress_summary).to_csv(stress_csv, index=False)
     print(
         json.dumps(
             {
                 "summary_json": str(summary_json),
                 "summary_markdown": str(summary_md),
                 "leaderboard_csv": str(leaderboard_csv),
+                "stress_json": str(stress_json),
+                "stress_markdown": str(stress_md),
+                "stress_csv": str(stress_csv),
                 "task_report_count": len(task_payloads),
             },
             ensure_ascii=True,
@@ -139,6 +151,16 @@ def build_markdown(payload: dict[str, Any]) -> str:
     for task in payload.get("task_results", []):
         lines.append(
             f"- `{task['benchmark_name']}` / `{task['task_id']}` / `{task['scenario']}` -> true `{task['true_formula']}`"
+        )
+    return "\n".join(lines)
+
+
+def build_stress_markdown(suite: str, rows: list[dict[str, Any]]) -> str:
+    lines = [f"# {suite} selector benchmark stress summary", "", "| Baseline | AvgAcc | WorstAcc | WorstTask | FailureBoundaryAcc |", "| --- | ---: | ---: | --- | ---: |"]
+    for row in rows:
+        lines.append(
+            f"| {row['baseline']} | {_fmt(row.get('average_selection_accuracy'))} | {_fmt(row.get('worst_case_accuracy'))} | "
+            f"{row.get('worst_case_task_id') or 'NA'} | {_fmt(row.get('failure_boundary_accuracy'))} |"
         )
     return "\n".join(lines)
 

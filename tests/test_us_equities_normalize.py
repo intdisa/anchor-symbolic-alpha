@@ -31,6 +31,7 @@ def test_normalize_xsc_us_equities_creates_expected_raw_files(tmp_path: Path) ->
                 "DlyCalDt": "2020-01-02",
                 "DlyRet": 0.01,
                 "DlyRetx": 0.01,
+                "DlyDelRet": 0.0,
                 "DlyPrc": 20.0,
                 "DlyVol": 100000,
                 "DlyBid": 19.9,
@@ -60,6 +61,7 @@ def test_normalize_xsc_us_equities_creates_expected_raw_files(tmp_path: Path) ->
                 "DlyCalDt": "2020-01-03",
                 "DlyRet": -0.02,
                 "DlyRetx": -0.02,
+                "DlyDelRet": -0.50,
                 "DlyPrc": 19.6,
                 "DlyVol": 120000,
                 "DlyBid": 19.5,
@@ -89,6 +91,7 @@ def test_normalize_xsc_us_equities_creates_expected_raw_files(tmp_path: Path) ->
                 "DlyCalDt": "2020-01-02",
                 "DlyRet": 0.03,
                 "DlyRetx": 0.03,
+                "DlyDelRet": 0.0,
                 "DlyPrc": 30.0,
                 "DlyVol": 150000,
                 "DlyBid": 29.9,
@@ -102,6 +105,17 @@ def test_normalize_xsc_us_equities_creates_expected_raw_files(tmp_path: Path) ->
             },
         ]
     ).to_csv(source_root / "crsp0025.csv", index=False)
+
+    pd.DataFrame(
+        [
+            {
+                "PERMNO": 10001,
+                "DelistingDt": "2020-01-03",
+                "DelRet": -0.5,
+                "DelStatusType": "500",
+            }
+        ]
+    ).to_csv(source_root / "crsp_delist.csv", index=False)
 
     pd.DataFrame(
         [
@@ -167,9 +181,10 @@ def test_normalize_xsc_us_equities_creates_expected_raw_files(tmp_path: Path) ->
     ).to_csv(source_root / "fwn4guf3dvyp5rls.csv", index=False)
 
     output_root = tmp_path / "us_equities" / "wrds"
-    summary = normalize_xsc_us_equities(source_root=source_root, output_root=output_root, chunksize=2)
+    summary = normalize_xsc_us_equities(source_root=source_root, output_root=output_root, chunksize=2, datasets=("crsp", "delisting", "ccm", "quarterly", "annual"))
 
     assert summary.crsp_daily_rows == 2
+    assert summary.crsp_delisting_rows == 1
     assert summary.crsp_names_rows == 1
     assert summary.ccm_rows == 1
     assert summary.quarterly_rows == 1
@@ -177,6 +192,7 @@ def test_normalize_xsc_us_equities_creates_expected_raw_files(tmp_path: Path) ->
 
     crsp_daily = pd.read_csv(output_root / "crsp_daily.csv.gz")
     crsp_names = pd.read_csv(output_root / "crsp_names.csv.gz")
+    crsp_delisting = pd.read_csv(output_root / "crsp_delisting.csv.gz")
     ccm = pd.read_csv(output_root / "ccm_link.csv.gz")
     quarterly = pd.read_csv(output_root / "compustat_quarterly.csv.gz")
 
@@ -200,6 +216,9 @@ def test_normalize_xsc_us_equities_creates_expected_raw_files(tmp_path: Path) ->
     assert crsp_daily["permno"].tolist() == [10001, 10001]
     assert crsp_daily["exchcd"].tolist() == [3, 3]
     assert crsp_daily["shrcd"].tolist() == [10, 10]
+    assert crsp_daily["dlret"].tolist() == [0.0, -0.5]
+    assert crsp_delisting["permno"].tolist() == [10001]
+    assert crsp_delisting["dlret"].tolist() == [-0.5]
     assert crsp_names.loc[0, "ticker"] == "AAA"
     assert str(ccm.loc[0, "gvkey"]).zfill(6) == "001000"
     assert "seq" in quarterly.columns

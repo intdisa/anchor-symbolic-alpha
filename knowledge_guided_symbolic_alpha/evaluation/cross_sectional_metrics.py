@@ -5,6 +5,9 @@ import pandas as pd
 
 from .risk_metrics import annual_return, max_drawdown, sharpe_ratio
 
+DEFAULT_MIN_LONG_COUNT = 5
+DEFAULT_MIN_SHORT_COUNT = 5
+
 
 def _align_panel(
     signal: pd.Series,
@@ -78,8 +81,16 @@ def cross_sectional_weights(
     entities: pd.Series,
     *,
     quantile: float = 0.2,
+    weight_scheme: str = "equal",
+    size_proxy: pd.Series | None = None,
+    min_long_count: int = DEFAULT_MIN_LONG_COUNT,
+    min_short_count: int = DEFAULT_MIN_SHORT_COUNT,
 ) -> pd.Series:
     frame = _align_panel(signal, signal, dates, entities=entities)
+    if size_proxy is not None:
+        frame = frame.join(pd.Series(size_proxy, index=signal.index, name="size_proxy"), how="left")
+    else:
+        frame["size_proxy"] = np.nan
 
     def build_weights(group: pd.DataFrame) -> pd.Series:
         rank = group["signal"].rank(pct=True, method="average")
@@ -88,13 +99,45 @@ def cross_sectional_weights(
         weights = pd.Series(0.0, index=group.index)
         long_count = int(long_mask.sum())
         short_count = int(short_mask.sum())
-        if long_count > 0:
-            weights.loc[long_mask] = 0.5 / long_count
-        if short_count > 0:
-            weights.loc[short_mask] = -0.5 / short_count
+        if long_count < int(min_long_count) or short_count < int(min_short_count):
+            return weights
+        if weight_scheme == "value":
+            if long_count > 0:
+                long_values = (
+                    pd.Series(group.loc[long_mask, "size_proxy"], copy=True)
+                    .replace([np.inf, -np.inf], np.nan)
+                    .fillna(0.0)
+                    .clip(lower=0.0)
+                )
+                long_sum = float(long_values.sum())
+                if long_sum > 0.0:
+                    weights.loc[long_mask] = 0.5 * long_values / long_sum
+                else:
+                    weights.loc[long_mask] = 0.5 / long_count
+            if short_count > 0:
+                short_values = (
+                    pd.Series(group.loc[short_mask, "size_proxy"], copy=True)
+                    .replace([np.inf, -np.inf], np.nan)
+                    .fillna(0.0)
+                    .clip(lower=0.0)
+                )
+                short_sum = float(short_values.sum())
+                if short_sum > 0.0:
+                    weights.loc[short_mask] = -0.5 * short_values / short_sum
+                else:
+                    weights.loc[short_mask] = -0.5 / short_count
+        else:
+            if long_count > 0:
+                weights.loc[long_mask] = 0.5 / long_count
+            if short_count > 0:
+                weights.loc[short_mask] = -0.5 / short_count
         return weights
 
-    weights = frame.groupby("date", sort=True, group_keys=False)[["signal"]].apply(build_weights)
+    grouped = frame.groupby("date", sort=True, group_keys=False)
+    try:
+        weights = grouped.apply(build_weights, include_groups=False)
+    except TypeError:
+        weights = grouped.apply(build_weights)
     weights = weights.reindex(signal.index).fillna(0.0)
     return weights
 
@@ -106,8 +149,21 @@ def cross_sectional_long_short_returns(
     entities: pd.Series,
     *,
     quantile: float = 0.2,
+    weight_scheme: str = "equal",
+    size_proxy: pd.Series | None = None,
+    min_long_count: int = DEFAULT_MIN_LONG_COUNT,
+    min_short_count: int = DEFAULT_MIN_SHORT_COUNT,
 ) -> tuple[pd.Series, pd.Series]:
-    weights = cross_sectional_weights(signal, dates, entities, quantile=quantile)
+    weights = cross_sectional_weights(
+        signal,
+        dates,
+        entities,
+        quantile=quantile,
+        weight_scheme=weight_scheme,
+        size_proxy=size_proxy,
+        min_long_count=min_long_count,
+        min_short_count=min_short_count,
+    )
     frame = _align_panel(signal, target, dates, entities=entities)
     frame["weight"] = weights.loc[frame.index]
     daily_returns = (frame["weight"] * frame["target"]).groupby(frame["date"], sort=True).sum()
@@ -133,8 +189,22 @@ def cross_sectional_risk_summary(
     entities: pd.Series,
     *,
     quantile: float = 0.2,
+    weight_scheme: str = "equal",
+    size_proxy: pd.Series | None = None,
+    min_long_count: int = DEFAULT_MIN_LONG_COUNT,
+    min_short_count: int = DEFAULT_MIN_SHORT_COUNT,
 ) -> dict[str, float]:
-    returns, weights = cross_sectional_long_short_returns(signal, target, dates, entities, quantile=quantile)
+    returns, weights = cross_sectional_long_short_returns(
+        signal,
+        target,
+        dates,
+        entities,
+        quantile=quantile,
+        weight_scheme=weight_scheme,
+        size_proxy=size_proxy,
+        min_long_count=min_long_count,
+        min_short_count=min_short_count,
+    )
     return {
         "sharpe": sharpe_ratio(returns),
         "max_drawdown": max_drawdown(returns),
@@ -151,10 +221,20 @@ def cross_sectional_stability_summary(
     *,
     quantile: float = 0.2,
     window_count: int = 4,
+    min_long_count: int = DEFAULT_MIN_LONG_COUNT,
+    min_short_count: int = DEFAULT_MIN_SHORT_COUNT,
 ) -> dict[str, float]:
     frame = _align_panel(signal, target, dates, entities=entities)
     rank_ic_by_date = _datewise_corr(frame, method="spearman").dropna()
-    daily_returns, _ = cross_sectional_long_short_returns(signal, target, dates, entities, quantile=quantile)
+    daily_returns, _ = cross_sectional_long_short_returns(
+        signal,
+        target,
+        dates,
+        entities,
+        quantile=quantile,
+        min_long_count=min_long_count,
+        min_short_count=min_short_count,
+    )
     daily_returns = daily_returns.dropna()
     aligned_dates = pd.Index(sorted(set(rank_ic_by_date.index).intersection(set(daily_returns.index))))
     if aligned_dates.empty:

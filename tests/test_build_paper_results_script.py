@@ -94,7 +94,7 @@ def _benchmark_summary() -> dict:
         "benchmark_name": "synthetic_selector_benchmark_suite",
         "leaderboard": [
             {
-                "baseline": "support_adjusted_cross_seed_consensus",
+                "baseline": "pareto_cross_seed_consensus",
                 "selection_accuracy": 1.0,
                 "misselection_rate": 0.0,
                 "oracle_regret_rank_ic": 0.0,
@@ -109,7 +109,7 @@ def _benchmark_summary() -> dict:
                 "scenario": "transient_spuriosity",
                 "true_formula": "X0 X1 ADD",
                 "baselines": {
-                    "support_adjusted_cross_seed_consensus": {
+                    "pareto_cross_seed_consensus": {
                         "selected_formula": "X0 X1 ADD",
                         "diagnostics": {
                             "support_adjusted_ranked_records": [
@@ -199,8 +199,8 @@ def test_build_paper_results_script(tmp_path: Path) -> None:
     report_payload = json.loads(json_report.read_text(encoding="utf-8"))
     claims_payload = json.loads(claims_json.read_text(encoding="utf-8"))
     assert report_payload["finance"]["universes"][0]["full"]["formula"] == "CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD"
-    assert report_payload["benchmark_sections"][0]["leaderboard"][0]["baseline"] == "support_adjusted_cross_seed_consensus"
-    assert claims_payload["paper_object"] == "cross_seed_robust_symbolic_selection"
+    assert report_payload["benchmark_sections"][0]["leaderboard"][0]["baseline"] == "pareto_cross_seed_consensus"
+    assert claims_payload["paper_object"] == "cross_seed_pareto_signal_selection"
     assert claims_payload["main_claims"][0]["id"] == "finance_consensus"
     assert "Benchmark Leaderboards" in markdown_report.read_text(encoding="utf-8")
     assert "Suggested Section Skeleton" in draft_outline.read_text(encoding="utf-8")

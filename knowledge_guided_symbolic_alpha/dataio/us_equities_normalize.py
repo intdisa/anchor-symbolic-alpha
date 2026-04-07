@@ -14,11 +14,20 @@ DEFAULT_XSC_SOURCE_ROOT = Path("xsc数据")
 DEFAULT_US_EQUITIES_WRDS_ROOT = Path("data/raw/us_equities/wrds")
 
 CRSP_SOURCE_FILE = "crsp0025.csv"
+CRSP_DELIST_SOURCE_CANDIDATES = (
+    "crsp_delist.csv",
+    "crsp_delist.csv.gz",
+    "crsp_delisting.csv",
+    "crsp_delisting.csv.gz",
+    "crsp_delist.zip",
+    "crsp_delisting.zip",
+)
 CCM_SOURCE_FILE = "ccm_link_2025.dta"
 QUARTERLY_SOURCE_FILE = "Comp_Quarterly6126.csv"
 ANNUAL_SOURCE_FILE = "fwn4guf3dvyp5rls.csv"
 
 CRSP_DAILY_OUTPUT = "crsp_daily.csv.gz"
+CRSP_DELIST_OUTPUT = "crsp_delisting.csv.gz"
 CRSP_NAMES_OUTPUT = "crsp_names.csv.gz"
 CCM_OUTPUT = "ccm_link.csv.gz"
 QUARTERLY_OUTPUT = "compustat_quarterly.csv.gz"
@@ -52,6 +61,12 @@ CRSP_USECOLS = [
     "DisFacPr",
     "DisFacShr",
     "ShrOut",
+]
+
+CRSP_OPTIONAL_DELIST_COLUMNS = [
+    "DlyDelRet",
+    "DLRET",
+    "dlret",
 ]
 
 CRSP_DAILY_COLUMNS = [
@@ -127,6 +142,7 @@ ANNUAL_USECOLS = [
 ]
 
 CCM_USECOLS = ["gvkey", "LPERMNO", "LINKDT", "LINKENDDT", "LINKTYPE", "LINKPRIM"]
+CRSP_DELIST_USECOLS = ["PERMNO", "DelistingDt", "DelRet", "DelStatusType"]
 
 PRIMARY_EXCHANGE_MAP = {
     "N": 1,
@@ -146,6 +162,7 @@ def _log(message: str) -> None:
 @dataclass(frozen=True)
 class USEquitiesNormalizationSummary:
     crsp_daily_rows: int
+    crsp_delisting_rows: int
     crsp_names_rows: int
     ccm_rows: int
     quarterly_rows: int
@@ -167,11 +184,12 @@ def normalize_xsc_us_equities(
     output_root.mkdir(parents=True, exist_ok=True)
 
     selected = set(datasets or ("crsp", "ccm", "quarterly", "annual"))
-    unknown = selected.difference({"crsp", "ccm", "quarterly", "annual"})
+    unknown = selected.difference({"crsp", "delisting", "ccm", "quarterly", "annual"})
     if unknown:
         raise ValueError(f"Unknown dataset names: {sorted(unknown)!r}")
 
     daily_rows = 0
+    delisting_rows = 0
     names_rows = 0
     ccm_rows = 0
     quarterly_rows = 0
@@ -183,6 +201,11 @@ def normalize_xsc_us_equities(
             output_root / CRSP_DAILY_OUTPUT,
             output_root / CRSP_NAMES_OUTPUT,
             chunksize=chunksize,
+        )
+    if "delisting" in selected:
+        delisting_rows = _normalize_crsp_delisting(
+            _resolve_optional_source(source_root, CRSP_DELIST_SOURCE_CANDIDATES),
+            output_root / CRSP_DELIST_OUTPUT,
         )
     if "ccm" in selected:
         ccm_rows = _normalize_ccm(source_root / CCM_SOURCE_FILE, output_root / CCM_OUTPUT)
@@ -201,12 +224,14 @@ def normalize_xsc_us_equities(
 
     return USEquitiesNormalizationSummary(
         crsp_daily_rows=daily_rows,
+        crsp_delisting_rows=delisting_rows,
         crsp_names_rows=names_rows,
         ccm_rows=ccm_rows,
         quarterly_rows=quarterly_rows,
         annual_rows=annual_rows,
         outputs={
             "crsp_daily": str(output_root / CRSP_DAILY_OUTPUT),
+            "crsp_delisting": str(output_root / CRSP_DELIST_OUTPUT),
             "crsp_names": str(output_root / CRSP_NAMES_OUTPUT),
             "ccm_link": str(output_root / CCM_OUTPUT),
             "compustat_quarterly": str(output_root / QUARTERLY_OUTPUT),
@@ -227,9 +252,15 @@ def _normalize_crsp(
     header_written = False
     _log(f"[us-equities] start crsp source={source_path} chunksize={chunksize}")
 
+    header_columns = pd.read_csv(source_path, nrows=0).columns.tolist()
+    usecols = [column for column in CRSP_USECOLS if column in header_columns]
+    optional_delist_column = next((column for column in CRSP_OPTIONAL_DELIST_COLUMNS if column in header_columns), None)
+    if optional_delist_column is not None:
+        usecols.append(optional_delist_column)
+
     with gzip.open(daily_output_path, "wt", encoding="utf-8", newline="") as handle:
         for chunk_index, chunk in enumerate(
-            pd.read_csv(source_path, usecols=CRSP_USECOLS, chunksize=chunksize, low_memory=False),
+            pd.read_csv(source_path, usecols=usecols, chunksize=chunksize, low_memory=False),
             start=1,
         ):
             filtered = _prepare_crsp_chunk(chunk)
@@ -261,6 +292,30 @@ def _normalize_crsp(
     return total_daily_rows, len(names)
 
 
+def _resolve_optional_source(source_root: Path, candidates: tuple[str, ...]) -> Path:
+    for name in candidates:
+        candidate = source_root / name
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        f"Missing optional source file under {source_root}. Tried: {', '.join(candidates)}"
+    )
+
+
+def _normalize_crsp_delisting(source_path: Path, output_path: Path) -> int:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    frame = pd.read_csv(source_path, usecols=CRSP_DELIST_USECOLS, low_memory=False)
+    frame["permno"] = pd.to_numeric(frame["PERMNO"], errors="coerce").astype("Int64")
+    frame["dlstdt"] = pd.to_datetime(frame["DelistingDt"], errors="coerce")
+    frame["dlret"] = pd.to_numeric(frame["DelRet"], errors="coerce")
+    frame["dlstcd"] = frame["DelStatusType"].astype("string")
+    frame = frame.dropna(subset=["permno", "dlstdt"]).copy()
+    frame["permno"] = frame["permno"].astype("int64")
+    frame = frame[["permno", "dlstdt", "dlret", "dlstcd"]].drop_duplicates(subset=["permno", "dlstdt"], keep="last")
+    frame.to_csv(output_path, index=False, compression="gzip")
+    return int(len(frame))
+
+
 def _prepare_crsp_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
     frame = chunk.copy()
     frame["USIncFlg"] = frame["USIncFlg"].astype(str).str.upper()
@@ -286,7 +341,8 @@ def _prepare_crsp_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
     frame["date"] = pd.to_datetime(frame["DlyCalDt"], errors="coerce")
     frame["ret"] = pd.to_numeric(frame["DlyRet"], errors="coerce")
     frame["retx"] = pd.to_numeric(frame["DlyRetx"], errors="coerce")
-    frame["dlret"] = np.nan
+    delist_column = next((column for column in CRSP_OPTIONAL_DELIST_COLUMNS if column in frame.columns), None)
+    frame["dlret"] = np.nan if delist_column is None else pd.to_numeric(frame[delist_column], errors="coerce")
     frame["prc"] = pd.to_numeric(frame["DlyPrc"], errors="coerce")
     frame["vol"] = pd.to_numeric(frame["DlyVol"], errors="coerce")
     frame["shrout"] = pd.to_numeric(frame["ShrOut"], errors="coerce")

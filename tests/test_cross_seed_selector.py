@@ -123,3 +123,119 @@ def test_cross_seed_consensus_selector_prefers_supported_champion() -> None:
 
     assert outcome.selected_formulas == ["RET_1 NEG"]
     assert outcome.ranked_records[0].champion_seed_support == 3
+
+
+def test_cross_seed_consensus_selector_prefers_richer_near_neighbor_signal() -> None:
+    frame = pd.DataFrame(
+        {
+            "date": pd.date_range("2020-01-01", periods=6, freq="D"),
+            "RET_1": [0.01, -0.02, 0.03, -0.01, 0.02, -0.01],
+            "TARGET_RET_1": [0.02, -0.01, 0.01, -0.02, 0.03, -0.01],
+        }
+    )
+    target = frame["TARGET_RET_1"]
+    rich = "CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD"
+    simple = "CASH_RATIO_Q RANK"
+
+    runs = [
+        CrossSeedSelectionRun(
+            seed=7,
+            candidate_records=(rich, simple),
+            selector_records=(simple,),
+            champion_records=(rich,),
+            selector_ranked_records=(
+                SimpleNamespace(formula=simple, robust_score=0.041, source="selector", role="anchor", temporal_pareto_rank=1, temporal_tiebreak_rank=1),
+                SimpleNamespace(formula=rich, robust_score=0.040, source="selector", role="anchor", temporal_pareto_rank=2, temporal_tiebreak_rank=2),
+            ),
+        ),
+        CrossSeedSelectionRun(
+            seed=17,
+            candidate_records=(rich, simple),
+            selector_records=(simple,),
+            champion_records=(rich,),
+            selector_ranked_records=(
+                SimpleNamespace(formula=simple, robust_score=0.041, source="selector", role="anchor", temporal_pareto_rank=1, temporal_tiebreak_rank=1),
+                SimpleNamespace(formula=rich, robust_score=0.040, source="selector", role="anchor", temporal_pareto_rank=2, temporal_tiebreak_rank=2),
+            ),
+        ),
+        CrossSeedSelectionRun(
+            seed=27,
+            candidate_records=(rich, simple),
+            selector_records=(simple,),
+            champion_records=(rich,),
+            selector_ranked_records=(
+                SimpleNamespace(formula=simple, robust_score=0.041, source="selector", role="anchor", temporal_pareto_rank=1, temporal_tiebreak_rank=1),
+                SimpleNamespace(formula=rich, robust_score=0.040, source="selector", role="anchor", temporal_pareto_rank=2, temporal_tiebreak_rank=2),
+            ),
+        ),
+        CrossSeedSelectionRun(
+            seed=37,
+            candidate_records=(rich, simple),
+            selector_records=(simple,),
+            champion_records=tuple(),
+            selector_ranked_records=(
+                SimpleNamespace(formula=simple, robust_score=0.041, source="selector", role="anchor", temporal_pareto_rank=1, temporal_tiebreak_rank=1),
+                SimpleNamespace(formula=rich, robust_score=0.040, source="selector", role="anchor", temporal_pareto_rank=2, temporal_tiebreak_rank=2),
+            ),
+        ),
+        CrossSeedSelectionRun(
+            seed=47,
+            candidate_records=(rich, simple),
+            selector_records=tuple(),
+            champion_records=tuple(),
+            selector_ranked_records=(
+                SimpleNamespace(formula=rich, robust_score=0.040, source="selector", role="anchor", temporal_pareto_rank=2, temporal_tiebreak_rank=2),
+                SimpleNamespace(formula=simple, robust_score=0.039, source="selector", role="anchor", temporal_pareto_rank=1, temporal_tiebreak_rank=1),
+            ),
+        ),
+    ]
+
+    fake_records = [
+        RobustSelectorRecord(
+            formula=rich,
+            source="test",
+            role="anchor",
+            selected=True,
+            admissible=True,
+            robust_score=0.0400,
+            pairwise_wins=1,
+            full_metrics={"rank_ic": 0.0400},
+            slice_rank_ic=[0.03, 0.05],
+            slice_sharpe=[0.0, 0.0],
+            slice_turnover=[0.0, 0.0],
+            diagnostics={},
+        ),
+        RobustSelectorRecord(
+            formula=simple,
+            source="test",
+            role="anchor",
+            selected=False,
+            admissible=True,
+            robust_score=0.0410,
+            pairwise_wins=1,
+            full_metrics={"rank_ic": 0.0410},
+            slice_rank_ic=[0.04, 0.04],
+            slice_sharpe=[0.0, 0.0],
+            slice_turnover=[0.0, 0.0],
+            diagnostics={},
+        ),
+    ]
+
+    class FakeTemporalSelector:
+        def select(self, candidates, frame_arg, target_arg):
+            return RobustSelectorOutcome(
+                selected_formulas=[rich],
+                fallback_used=False,
+                records=fake_records,
+                config={"selected_count": 1},
+            )
+
+    outcome = CrossSeedConsensusSelector(temporal_selector=FakeTemporalSelector()).select(
+        runs,
+        frame,
+        target,
+        base_candidates=[FormulaCandidate(formula=rich, source="test", role="anchor"), FormulaCandidate(formula=simple, source="test", role="anchor")],
+    )
+
+    assert outcome.selected_formulas == [rich]
+    assert outcome.ranked_records[0].formula == rich

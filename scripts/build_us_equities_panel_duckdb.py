@@ -86,10 +86,25 @@ def main() -> None:
     con.execute("SET preserve_insertion_order=false")
 
     crsp_daily = raw_root / "wrds" / "crsp_daily.csv.gz"
+    crsp_delisting = raw_root / "wrds" / "crsp_delisting.csv.gz"
     crsp_names = raw_root / "wrds" / "crsp_names.csv.gz"
     ccm_link = raw_root / "wrds" / "ccm_link.csv.gz"
     comp_q = raw_root / "wrds" / "compustat_quarterly.csv.gz"
     comp_a = raw_root / "wrds" / "compustat_annual.csv.gz"
+    use_delisting = crsp_delisting.exists()
+
+    if use_delisting:
+        con.execute(
+            f"""
+            CREATE OR REPLACE TEMP VIEW delisting_v AS
+            SELECT
+              CAST(permno AS BIGINT) AS permno,
+              CAST(dlstdt AS DATE) AS date,
+              CAST(dlret AS DOUBLE) AS dlret
+            FROM read_csv_auto('{sql_path(crsp_delisting)}', header=true)
+            WHERE dlstdt IS NOT NULL
+            """
+        )
 
     if not args.skip_interim and (args.force_rebuild or not interim_path.exists()):
         print("[us-equities] build daily interim", flush=True)
@@ -98,14 +113,19 @@ def main() -> None:
             COPY (
               WITH daily AS (
                 SELECT
-                  CAST(permno AS BIGINT) AS permno,
-                  CAST(permco AS BIGINT) AS permco,
-                  CAST(date AS DATE) AS date,
-                  CAST(COALESCE(retx, ret) AS DOUBLE) AS ret_1,
-                  ABS(CAST(prc AS DOUBLE)) AS close,
-                  CAST(vol AS DOUBLE) AS vol,
-                  CAST(shrout AS DOUBLE) AS shares_out
-                FROM read_csv_auto('{sql_path(crsp_daily)}', header=true)
+                  CAST(base.permno AS BIGINT) AS permno,
+                  CAST(base.permco AS BIGINT) AS permco,
+                  CAST(base.date AS DATE) AS date,
+                  CAST(COALESCE(base.retx, base.ret) AS DOUBLE) AS ret_1,
+                  CASE
+                    WHEN base.ret IS NULL AND COALESCE(CAST(base.dlret AS DOUBLE), dl.dlret) IS NULL THEN NULL
+                    ELSE (1.0 + COALESCE(CAST(base.ret AS DOUBLE), 0.0)) * (1.0 + COALESCE(CAST(base.dlret AS DOUBLE), dl.dlret, 0.0)) - 1.0
+                  END AS ret_total_1,
+                  ABS(CAST(base.prc AS DOUBLE)) AS close,
+                  CAST(base.vol AS DOUBLE) AS vol,
+                  CAST(base.shrout AS DOUBLE) AS shares_out
+                FROM read_csv_auto('{sql_path(crsp_daily)}', header=true) base
+                {'LEFT JOIN delisting_v dl ON CAST(base.permno AS BIGINT) = dl.permno AND CAST(base.date AS DATE) = dl.date' if use_delisting else 'LEFT JOIN (SELECT NULL::BIGINT AS permno, NULL::DATE AS date, NULL::DOUBLE AS dlret) dl ON FALSE'}
               ),
               enriched AS (
                 SELECT
@@ -117,7 +137,7 @@ def main() -> None:
                     WHEN COALESCE(ret_1, 0.0) <= -0.999999 THEN NULL
                     ELSE LN(1.0 + COALESCE(ret_1, 0.0))
                   END AS safe_log_ret,
-                  LEAD(ret_1) OVER w AS target_ret_1_raw,
+                  LEAD(ret_total_1) OVER w AS target_ret_1_raw,
                   ROW_NUMBER() OVER w AS history_count,
                   EXP(SUM(CASE WHEN COALESCE(ret_1, 0.0) <= -0.999999 THEN NULL ELSE LN(1.0 + COALESCE(ret_1, 0.0)) END) OVER w5) - 1.0 AS ret_5,
                   EXP(SUM(CASE WHEN COALESCE(ret_1, 0.0) <= -0.999999 THEN NULL ELSE LN(1.0 + COALESCE(ret_1, 0.0)) END) OVER w20) - 1.0 AS ret_20,

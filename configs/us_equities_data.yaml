@@ -133,6 +133,19 @@ us_equities:
         - gvkey
         - datadate
       output_file: compustat_annual.csv.gz
+    crsp_delisting:
+      schema: crsp
+      table: dsedelist
+      date_column: dlstdt
+      columns:
+        - permno
+        - dlstdt
+        - dlret
+        - dlstcd
+      order_by:
+        - permno
+        - dlstdt
+      output_file: crsp_delisting.csv.gz
   public_sources:
     fama_french_daily:
       output_file: fama_french_daily.csv.gz

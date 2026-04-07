@@ -11,6 +11,8 @@ dependencies = [
   "numpy",
   "pandas",
   "PyYAML",
+  "scikit-learn",
+  "statsmodels",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +22,10 @@ train = [
 eval = [
   "duckdb",
   "pyarrow",
+]
+research = [
+  "shap",
+  "pysr",
 ]
 wrds = [
   "pg8000",

@@ -116,6 +116,7 @@ def load_us_equities_raw_tables(raw_root: str | Path = DEFAULT_US_EQUITIES_RAW_R
             parse_dates=["datadate"],
             dtype={"gvkey": "string"},
         ),
+        "crsp_delisting": _read_optional_delisting_table(root / "wrds" / "crsp_delisting.csv.gz"),
     }
 
 
@@ -200,7 +201,7 @@ def _ensure_required_files(root: Path, required: dict[str, Path], *, hint: str) 
 
 def build_panel_from_tables(tables: dict[str, pd.DataFrame], filters: dict[str, Any] | None = None) -> pd.DataFrame:
     filters = filters or {}
-    daily = _prepare_daily_panel(tables["crsp_daily"], filters)
+    daily = _prepare_daily_panel(tables["crsp_daily"], filters, tables.get("crsp_delisting"))
     names = _prepare_names_table(tables["crsp_names"])
     ccm = _prepare_ccm_table(tables["ccm_link"])
     quarterly = _prepare_quarterly_fundamentals(tables["compustat_quarterly"], filters)
@@ -229,10 +230,30 @@ def split_panel_by_dates(panel: pd.DataFrame, split_config: dict[str, dict[str, 
     )
 
 
-def _prepare_daily_panel(frame: pd.DataFrame, filters: dict[str, Any]) -> pd.DataFrame:
+def _read_optional_delisting_table(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame(columns=["permno", "dlstdt", "dlret", "dlstcd"])
+    return pd.read_csv(
+        path,
+        parse_dates=["dlstdt"],
+        dtype={"permno": "int64", "dlstcd": "Int64"},
+    )
+
+
+def _prepare_daily_panel(frame: pd.DataFrame, filters: dict[str, Any], delisting_frame: pd.DataFrame | None = None) -> pd.DataFrame:
     daily = frame.copy()
     daily["date"] = pd.to_datetime(daily["date"])
     daily["permno"] = daily["permno"].astype("int64")
+    if "dlret" in daily.columns:
+        daily["dlret"] = pd.to_numeric(daily["dlret"], errors="coerce")
+    else:
+        daily["dlret"] = np.nan
+    if delisting_frame is not None and not delisting_frame.empty:
+        delisting = _prepare_delisting_table(delisting_frame)
+        daily = daily.merge(delisting, on=["permno", "date"], how="left", suffixes=("", "_from_delist"))
+        if "dlret_from_delist" in daily.columns:
+            daily["dlret"] = daily["dlret"].where(daily["dlret"].notna(), daily["dlret_from_delist"])
+            daily = daily.drop(columns=["dlret_from_delist"])
     daily = daily.sort_values(["permno", "date"]).reset_index(drop=True)
 
     daily["close"] = daily["prc"].abs().replace(0.0, np.nan)
@@ -240,6 +261,7 @@ def _prepare_daily_panel(frame: pd.DataFrame, filters: dict[str, Any]) -> pd.Dat
     daily["market_cap"] = daily["close"] * daily["shares_out"]
     daily["dollar_volume"] = daily["close"] * daily["vol"].fillna(0.0)
     daily["ret_1"] = daily["retx"].fillna(daily["ret"]).astype(float)
+    daily["ret_total_1"] = _combine_delisting_return(daily["ret"], daily["dlret"])
 
     grouped = daily.groupby("permno", group_keys=False)
     daily["ret_5"] = grouped["ret_1"].transform(lambda s: (1.0 + s.fillna(0.0)).rolling(5, min_periods=5).apply(np.prod, raw=True) - 1.0)
@@ -254,7 +276,7 @@ def _prepare_daily_panel(frame: pd.DataFrame, filters: dict[str, Any]) -> pd.Dat
         .reset_index(level=0, drop=True)
     )
     daily["price_to_252_high"] = grouped["close"].transform(lambda s: s / s.rolling(252, min_periods=20).max() - 1.0)
-    daily["target_ret_1_raw"] = grouped["ret_1"].shift(-1)
+    daily["target_ret_1_raw"] = grouped["ret_total_1"].shift(-1)
 
     min_price = float(filters.get("min_price", 5.0))
     min_dollar_volume = float(filters.get("min_dollar_volume_20", 1_000_000.0))
@@ -268,11 +290,29 @@ def _prepare_daily_panel(frame: pd.DataFrame, filters: dict[str, Any]) -> pd.Dat
     return daily
 
 
+def _combine_delisting_return(ret: pd.Series, dlret: pd.Series) -> pd.Series:
+    ret_series = pd.to_numeric(ret, errors="coerce")
+    dlret_series = pd.to_numeric(dlret, errors="coerce")
+    has_observation = ret_series.notna() | dlret_series.notna()
+    combined = (1.0 + ret_series.fillna(0.0)) * (1.0 + dlret_series.fillna(0.0)) - 1.0
+    return combined.where(has_observation)
+
+
 def _rolling_amihud(series: pd.DataFrame) -> pd.Series:
     abs_ret = series["ret_1"].abs()
     dollar_volume = series["dollar_volume"].replace(0.0, np.nan)
     ratio = abs_ret / dollar_volume
     return ratio.rolling(20, min_periods=20).mean()
+
+
+def _prepare_delisting_table(frame: pd.DataFrame) -> pd.DataFrame:
+    delisting = frame.copy()
+    delisting["permno"] = pd.to_numeric(delisting["permno"], errors="coerce").astype("Int64")
+    delisting["date"] = pd.to_datetime(delisting["dlstdt"], errors="coerce")
+    delisting["dlret"] = pd.to_numeric(delisting["dlret"], errors="coerce")
+    delisting = delisting.dropna(subset=["permno", "date"]).copy()
+    delisting["permno"] = delisting["permno"].astype("int64")
+    return delisting[["permno", "date", "dlret"]].drop_duplicates(subset=["permno", "date"], keep="last")
 
 
 def _prepare_names_table(frame: pd.DataFrame) -> pd.DataFrame:

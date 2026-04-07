@@ -204,7 +204,13 @@ def build_selector_case_studies(finance_payload: dict[str, Any], benchmark_secti
             continue
         first_task = None
         for task in section.get("task_results", []):
-            baseline = task.get("baselines", {}).get("support_adjusted_cross_seed_consensus")
+            baselines = task.get("baselines", {})
+            baseline = (
+                baselines.get("legacy_linear_selector")
+                or baselines.get("support_adjusted_cross_seed_consensus")
+                or baselines.get("pareto_discrete_legacy")
+                or baselines.get("pareto_cross_seed_consensus")
+            )
             if baseline:
                 first_task = {
                     "task_id": task.get("task_id"),
@@ -242,9 +248,19 @@ def build_claims_payload(payload: dict[str, Any]) -> dict[str, Any]:
     public = benchmark_section_by_label(benchmark_sections, "public_symbolic")
     liquid500 = finance["universes"][0]
     liquid1000 = finance["universes"][1]
-    synthetic_support = benchmark_leader(synthetic, "support_adjusted_cross_seed_consensus")
+    synthetic_support = (
+        benchmark_leader(synthetic, "legacy_linear_selector")
+        or benchmark_leader(synthetic, "support_adjusted_cross_seed_consensus")
+        or benchmark_leader(synthetic, "pareto_discrete_legacy")
+        or benchmark_leader(synthetic, "pareto_cross_seed_consensus")
+    )
     synthetic_naive = benchmark_leader(synthetic, "naive_rank_ic")
-    public_support = benchmark_leader(public, "support_adjusted_cross_seed_consensus")
+    public_support = (
+        benchmark_leader(public, "legacy_linear_selector")
+        or benchmark_leader(public, "support_adjusted_cross_seed_consensus")
+        or benchmark_leader(public, "pareto_discrete_legacy")
+        or benchmark_leader(public, "pareto_cross_seed_consensus")
+    )
     public_naive = benchmark_leader(public, "naive_rank_ic")
     public_mean = benchmark_leader(public, "cross_seed_mean_score_consensus")
     public_single = benchmark_leader(public, "single_seed_temporal_selector")
@@ -275,7 +291,7 @@ def build_claims_payload(payload: dict[str, Any]) -> dict[str, Any]:
         claims.append(
             {
                 "id": "synthetic_selector_gain",
-                "claim": "On synthetic temporal-shift benchmarks, support-adjusted consensus beats naive validation ranking.",
+                "claim": "On synthetic temporal-shift benchmarks, the Pareto cross-seed selector improves the accuracy-stability trade-off relative to naive validation ranking.",
                 "evidence": {
                     "support_selection_accuracy": synthetic_support.get("selection_accuracy"),
                     "naive_selection_accuracy": synthetic_naive.get("selection_accuracy"),
@@ -288,7 +304,7 @@ def build_claims_payload(payload: dict[str, Any]) -> dict[str, Any]:
         claims.append(
             {
                 "id": "public_selector_gain",
-                "claim": "On public symbolic benchmarks, support-adjusted consensus outperforms single-seed and naive baselines, and it also beats mean-score consensus after adding the seed-shift product task.",
+                "claim": "On public symbolic benchmarks, the Pareto cross-seed selector remains on the accuracy-stability frontier against single-seed, naive, and mean-score baselines.",
                 "evidence": {
                     "support_selection_accuracy": public_support.get("selection_accuracy"),
                     "naive_selection_accuracy": public_naive.get("selection_accuracy") if public_naive else None,
@@ -310,19 +326,19 @@ def build_claims_payload(payload: dict[str, Any]) -> dict[str, Any]:
         },
         {
             "name": "TemporalRobustSelector",
-            "role": "Scores candidate formulas across temporal slices with admissibility gates, stability terms, and near-neighbor tie-breaks.",
+            "role": "Ranks candidate formulas with temporal Pareto dominance, crowding distance, admissibility gates, and near-neighbor tie-breaks.",
         },
         {
             "name": "CrossSeedConsensusSelector",
-            "role": "Aggregates candidate, selector, and champion support across seeds and emits the canonical formula.",
+            "role": "Aggregates seed-level support and temporal diagnostics through cross-seed Pareto dominance and emits the canonical formula.",
         },
     ]
     return {
-        "paper_object": "cross_seed_robust_symbolic_selection",
+        "paper_object": "cross_seed_pareto_signal_selection",
         "title_candidates": [
-            "Cross-Seed Robust Symbolic Selection under Temporal Shift",
-            "Selecting Stable Symbolic Formulas from Rashomon Candidate Pools",
-            "Robust Symbolic Model Selection with Temporal and Seed Variability",
+            "Cross-Seed Pareto Signal Selection under Temporal Shift",
+            "Selecting Stable Symbolic Signals from Rashomon Candidate Pools",
+            "Pareto-Ranked Symbolic Signal Selection with Temporal and Seed Variability",
         ],
         "main_claims": claims,
         "method_components": method_components,
@@ -344,8 +360,8 @@ def build_outline_markdown(payload: dict[str, Any], claims_payload: dict[str, An
         "## Core Thesis",
         "",
         "- One anchor generator produces candidate symbolic formulas.",
-        "- A temporal selector ranks formulas within a seed under shift.",
-        "- A cross-seed support-adjusted selector emits the canonical formula.",
+        "- A temporal selector ranks formulas within a seed under shift using Pareto dominance and crowding distance.",
+        "- A cross-seed Pareto selector emits the canonical formula.",
         "",
         "## Main Claims",
         "",
@@ -361,7 +377,7 @@ def build_outline_markdown(payload: dict[str, Any], claims_payload: dict[str, An
             "   - motivate symbolic selection under temporal and seed variability",
             "   - state that multi-agent synergy is not the final contribution",
             "2. Method",
-            "   - define candidate pool, temporal robust score, and support-adjusted consensus",
+            "   - define candidate pool, temporal Pareto dominance, and cross-seed Pareto consensus",
             "   - present TemporalRobustSelector and CrossSeedConsensusSelector",
             "3. Benchmarks",
             "   - synthetic temporal-shift suite",
@@ -370,7 +386,7 @@ def build_outline_markdown(payload: dict[str, Any], claims_payload: dict[str, An
             "4. Main Results",
             f"   - liquid500 canonical formula `{liquid500['full']['formula']}` with Sharpe `{_fmt(liquid500['full']['sharpe'])}`",
             f"   - liquid1000 canonical formula `{liquid1000['full']['formula']}` with Sharpe `{_fmt(liquid1000['full']['sharpe'])}`",
-            "   - benchmark headline tables emphasizing support-adjusted consensus",
+            "   - benchmark headline tables emphasizing the accuracy-stability frontier",
             "5. Controls and Ablations",
             "   - full vs quality_solvency_only equivalence",
             "   - short_horizon_flow as a control branch",

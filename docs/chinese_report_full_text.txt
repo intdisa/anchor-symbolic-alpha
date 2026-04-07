@@ -1,0 +1,231 @@
+# 低信噪比符号信号选择中的伪赢家过滤：来自美国股票横截面与公开基准的证据
+
+作者：待填写  
+单位：待填写  
+联系方式：待填写  
+
+## 摘要
+
+本文研究低信噪比符号搜索中的信号选择问题。针对美国股票横截面中候选表达式高度同源、验证分数接近而未来表现显著分化的现象，本文提出两阶段稳定性协议：先在单个随机种子内利用时间分片表现、分片波动、换手和复杂度对候选进行稳健排序，再在跨随机种子层面综合冠军支持、选择支持和候选支持形成共识，并在截断 shortlist 上实施条件 MCS 代理。参数校准采用滚动元验证，以最大化前后半段排序一致性并惩罚信号衰减和高换手。纯测试期结果显示，`liquid500` 与 `liquid1000` 最终都收敛到 `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`。按市值加权口径，其 Gross Sharpe 分别为 `0.7829` 和 `0.7955`，年化 FF5 alpha 分别为 `4.73%` 和 `4.51%`。双重排序表明，该信号主要由中大盘组合驱动；相对地，`naive rank-IC` 选出的稀疏异常解在统一多空熔断规则下可交易日占比直接降为 `0`。本文的主要贡献在于构建一套可复现的减方差与伪赢家过滤机制，使自动搜索在强 alpha 稀缺时收敛到具有经济学常识和交易可行性的防御型结构。
+
+关键词：符号信号；横截面预测；稳定性选择；数据窥探；模型置信集
+
+## Abstract
+
+This paper studies signal selection in low signal-to-noise symbolic search. Instead of expanding the expression space, the main problem is to identify survivable signals from structurally similar candidates whose validation scores are close but whose future performance diverges sharply. To address this issue, the paper develops a two-stage stability protocol. The first stage evaluates each candidate within a single random seed using temporal slices, rank-IC dispersion, turnover, and complexity. The second stage aggregates champion support, selector support, and candidate support across random seeds, and then applies a conditional Model Confidence Set proxy on a truncated shortlist. Hyperparameters are calibrated by rolling meta-validation that rewards rank consistency across calibration and evaluation halves while penalizing decay and excessive turnover. On the pure test period from 2019-01-02 to 2025-12-30, both `liquid500` and `liquid1000` converge to the same canonical signal, `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`. Under value weighting, the signal delivers Gross Sharpe ratios of `0.7829` and `0.7955`, with annualized FF5 alphas of `4.73%` and `4.51%`. Double sorts show that the payoff is concentrated in mid- and large-cap stocks, while sparse pseudo-winners selected by naive validation rules become non-tradable once the unified coverage fuse is imposed. The contribution of the paper is therefore a reproducible variance-reduction and pseudo-winner filtering protocol rather than the discovery of a statistically significant new factor.
+
+Keywords: symbolic signal; cross-sectional prediction; stability selection; data snooping; model confidence set
+
+## 1. 引言
+
+近年来，金融符号搜索快速发展。相比传统因子研究依赖人工提出并逐条检验候选结构，符号搜索试图在预设特征库与算子库上自动组合表达式，从而以更低的人力成本枚举更大规模的经济假设空间[1-5]。问题在于，表达式空间越大，验证极值越不可信。对于美国股票横截面这类低信噪比对象，许多表面上优异的候选往往只是噪声、局部覆盖率异常、样本切片偶然重合或随机种子扰动的产物。研究者如果只报告最终最好的一个数字，往往会将本应被剔除的伪信号过度包装为全新发现[6-10]。
+
+从这个角度看，符号搜索真正稀缺的不是生成器继续产出更多公式，而是如何在同一生成空间内建立更稳健的筛选协议。给定同一批底层特征和相近的语法约束，候选表达式经常形成一簇高度同源的近邻结构：它们共享相似构件，在验证期上分数接近，却可能在真实前向滚动中呈现完全不同的命运。有的表达式在极少数日期与极少数股票上暴涨，制造出惊人的 Sharpe；有的表达式在单一随机种子中表面上可靠，却无法跨时间和跨种子复现。若选择器缺少对时间漂移、近邻共线与覆盖度异常的约束，搜索规模越大，过拟合的风险反而越高[8-12]。
+
+本文据此收缩研究目标。本文关注的问题更窄也更现实：在巨大的符号候选池中，如何利用时间分片稳定性与跨随机种子共识，降低选择阶段方差，并阻止系统将局部极值误判为可持续信号。换言之，本文聚焦的是一个选择问题，而不是一个生成问题；其核心任务是防止伪赢家进入主文证据链。
+
+围绕这一目标，本文提出两阶段稳定性协议。第一阶段在单个随机种子内，用时间分片表现、最差分片、分片波动、换手和复杂度对候选进行稳健排序。第二阶段在跨随机种子层面，以冠军支持、选择支持和候选支持形成共识，再在截断 shortlist 上实施条件 MCS 代理，检验典型信号是否至少位于“无法被剔除”的集合内。该设计的作用在于降低由单次验证与单次搜索路径带来的选择误差。
+
+美国股票横截面上的结果支持这一定位。纯测试期中，`liquid500` 与 `liquid1000` 最终都保留了 `CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD` 这一简洁信号。按等权口径观测，其统计显著性较为温和；但按市值加权口径与双重排序口径观测，该信号更像一种由中大盘主导的防御型质量结构，而不是依赖微盘尾部的噪声幻觉。更强的证据来自对伪赢家的剖解：在统一多空熔断规则下，若某个异常解根本无法在大多数交易日同时形成多头和空头，则其并不构成同口径的可交易多空策略。
+
+本文的实证框架表明，在剔除多重检验偏误与微观结构噪音后，系统会稳定收敛到一套可复现、可审查且能够约束过拟合风险的防守型筛选协议。对当前越来越依赖大规模自动搜索的机器学习资产定价研究而言，这类减方差机制比单纯继续堆叠搜索算力更具现实必要性。
+
+## 2. 文献综述与研究定位
+
+第一类相关文献是金融符号搜索与语法约束生成。此类研究的共同目标，是在有限的基础特征与算子库上自动枚举、评估并筛选潜在的横截面预测结构。已有工作展示了强化学习、语法约束、记忆增强代理和 Transformer 等生成方法在表达式搜索中的潜力，也推动了符号搜索从手工因子工程走向自动化发现[1-5]。然而，这类文献更强调如何生成更多候选、如何扩大表达式多样性，较少系统讨论在极低信噪比市场中，如何避免把局部最优和稀疏异常解误读为稳健信号。本文的立足点恰好在这里：生成器可以继续复杂化，但若选择器不稳健，扩大搜索空间只会进一步放大伪赢家问题。
+
+第二类文献是机器学习资产定价与大规模 alpha 检验。该类研究反复提醒我们，股票横截面中的强统计显著性并不容易获得，且大量看似优异的结果最终会被多重检验、样本分割、交易成本和数据窥探所侵蚀[6-10]。Harvey、Liu 与 Zhu 关于因子挖掘的讨论，White 关于 data snooping 的现实检验，以及后续关于 thousands of alpha tests 的证据，都指向同一个事实：在高维搜索环境里，真正稀缺的是经得起样本外验证与经济约束的结构，而不是单次最优数字。本文与这条文献脉络相一致，只是把讨论对象从传统线性特征扩展到了高度非线性的符号表达式空间。
+
+第三类文献是稳定性选择、模型集与条件检验。Meinshausen 与 Bühlmann 的稳定性选择强调，在高维场景中，跨重抽样的一致性本身就是重要证据；Hansen、Lunde 与 Nason 的模型置信集则说明，当一组模型表现相近且无法轻易区分时，与其强行宣布唯一赢家，不如保留一个“无法被剔除”的集合[11-15]。本文的方法与这些思想一脉相承，但也与其存在明显差异。首先，经典稳定性选择多在固定特征空间中讨论选择频率，而本文面对的是动态生成、结构同源且高度共线的符号表达式簇。其次，经典 MCS 面向给定模型集合，而本文必须先在巨大的表达式池中降维，才能在可计算的 shortlist 上实施条件检验。基于此，本文把 MCS 明确界定为启发式两步重抽样代理，而不是严格的筛选后推断。
+
+第四类文献是特征解释、稀疏选择与通用符号回归基线。LASSO、SHAP、静态 Pareto 以及默认均方误差目标下的 PySR 都代表了现实研究中常见的“先生成后筛选”方案[16-18]。它们的价值在于提供透明、可复现且广泛可用的基线，但在本文面对的任务中也暴露出结构性局限。LASSO 与 SHAP 容易在高度同源的近邻簇内部偏向更简化的单项结构；默认 MSE 目标下的通用符号回归范式，则更容易被局部数值拟合牵引，而不是围绕横截面排序稳定性做约束。本文不是否定这些方法本身，而是把它们作为对照，说明在低信噪比金融截面上，选择器的稳定性约束往往比底层搜索器的表面复杂度更关键。
+
+据此，本文的研究定位可以概括为：在巨大且高度同源的符号空间中，构造一套工程上可实现、统计上尽可能克制、并能对伪赢家形成经验约束的选择协议。它既不声称替代经典统计推断，也不试图证明唯一真赢家存在；它更接近一种结构敏感的风险控制框架，用于限制自动搜索在金融横截面中的过度拟合冲动。
+
+## 3. 方法
+
+### 3.1 问题定义
+
+设环境序列为 $E=(e_1,\ldots,e_T)$，随机种子集合为 $\mathcal{S}=\{s_1,\ldots,s_n\}$，候选信号集合为 $C=\{c_1,\ldots,c_m\}$。本文关心的不是单次验证中的局部最优，而是在不同随机种子、不同时间片和真实测试期滚动中都能维持基本结构的信号：
+
+$$
+ c^{\star}=\arg\max_{c\in C}\,\mathbb{E}_{s\in\mathcal{S}}\left[U\left(c;E^{\text{test}},s\right)\right].
+\tag{1}
+$$
+
+这里的真实效用 $U(\cdot)$ 属于不可观测变量。研究者能够观测的只是验证期上的若干代理指标，而这些代理本身携带噪声与路径依赖。尤其在候选池很大时，简单取最大值会系统性地高估极端样本的可持续性。本文因此不直接将验证期最高分写成最终答案，而是先用时间稳健性约束单种子选择，再用跨随机种子共识对候选做第二次过滤。
+
+### 3.2 正文主方法：两阶段稳定性选择协议
+
+第一阶段在单个随机种子内部工作。验证期被切分为多个连续时间片，每个候选信号都需要在这些切片上重复接受检验。本文关心的不只是平均 rank-IC，还关心最差时间片是否明显失真、分片表现是否剧烈波动、换手是否过高，以及信号本身是否依赖复杂而脆弱的结构。基于这些考量，正文主方法使用如下时间稳健分数：
+
+$$
+ r(c)=\bar I(c)+\alpha I_{\min}(c)-\beta\sigma_I(c)+\gamma p_+(c)+\delta\tanh\!\left(\frac{\bar S(c)}{\hat\sigma_{S,\mathrm{train}}}\right)+\eta\tanh\!\left(\frac{R(c)}{\hat\sigma_{R,\mathrm{train}}}\right)+\zeta\,\widetilde{K}(c)-\lambda_{\tau}\tau(c)-\lambda_{\kappa}\kappa(c).
+\tag{2}
+$$
+
+式中，$\bar I(c)$、$I_{\min}(c)$ 和 $\sigma_I(c)$ 分别表示分片平均 rank-IC、最差时间片 rank-IC 和分片波动；$p_+(c)$ 表示正分片占比；$\bar S(c)$ 与 $R(c)$ 分别是分片平均 Sharpe 和年化收益；$\tau(c)$ 表示换手，$\kappa(c)$ 表示复杂度。为了避免不同量纲项直接相加带来的硬编码问题，Sharpe 与年化收益都不再用固定常数缩放，而是除以训练期候选分布的经验尺度 $\hat\sigma_{S,\mathrm{train}}$ 与 $\hat\sigma_{R,\mathrm{train}}$。这样做的目的不是追求某个参数的最优美形式，而是把不同统计量压回到近似可比较的数量级上。
+
+辅助稳定性项 $\widetilde{K}(c)$ 用于约束候选在分片上的极端扭曲，其定义为
+
+$$
+\widetilde{K}(c)=\max\left\{\min\left[K(c),0.05\right],-0.05\right\},
+$$
+
+其中 $K(c)$ 对应评估器输出的基础稳定性分数，裁剪的目的在于防止个别极端样本把主分数完全主导。这个处理并不改变信号排序的主要来源，但能减少由异常切片产生的数值爆炸。
+
+第二阶段在跨随机种子层面工作。单个随机种子的冠军候选未必可靠，但如果某个信号在不同种子下反复进入冠军、反复被稳定性选择器保留、并且能反复以候选身份出现在 shortlist 中，那么它至少具备更高的跨路径可复现性。基于此，本文构造跨随机种子的共识分数：
+
+$$
+ A(c)=r(c)+w_{ch}p_{ch}(c)+w_{sel}p_{sel}(c)+w_{can}p_{can}(c)-\lambda_q\max\{q(c)-1,0\}.
+\tag{3}
+$$
+
+其中，$p_{ch}(c)$、$p_{sel}(c)$ 与 $p_{can}(c)$ 分别表示冠军支持、选择支持与候选支持，$q(c)$ 为共识 shortlist 内的平均排序位置。这里的逻辑不是“支持越多越真”，而是“在时间与种子双重扰动下仍能反复出现的结构，更不容易是某一次路径噪声的偶然产物”。平均排序位置的惩罚则用于避免在支持度相近时，让长期排位靠后的候选占据典型信号位置。
+
+### 3.3 滚动元验证、敏感性与 MCS 代理
+
+主方法的超参数不是通过整段验证期上的收益极值直接确定，而是通过滚动元验证校准。验证期被进一步划分为多个连续窗口，每个窗口再拆成前半段与后半段。设 $\theta$ 表示一组超参数，$c^*_{w,\theta}$ 表示窗口 $w$ 校准半段筛出的典型信号，$\mathbf{I}^{\mathrm{cal}}_{w,\theta}$ 与 $\mathbf{I}^{\mathrm{meta}}_{w,\theta}$ 表示同一候选池在窗口前后半段上的 rank-IC 向量，则元验证阶段最大化
+
+$$
+J_w(\theta)=\rho\!\left(\mathbf{I}^{\mathrm{cal}}_{w,\theta},\mathbf{I}^{\mathrm{meta}}_{w,\theta}\right)
+\;+\;\exp\!\left(
+ -\frac{\left|I_{\mathrm{meta}}\!\left(c^*_{w,\theta}\right)-I_{\mathrm{cal}}\!\left(c^*_{w,\theta}\right)\right|}{s_w}
+\right)
+\;-\;\tanh\!\left(\frac{\tau_{\mathrm{meta}}\!\left(c^*_{w,\theta}\right)}{\hat\sigma_{\tau,w,\theta}}\right).
+\tag{4}
+$$
+
+这里，$\rho(\cdot,\cdot)$ 为前后半段候选 rank-IC 向量的 Spearman 秩相关，第一项衡量排序结构的一致性；第二项用有界指数函数惩罚典型信号在前后半段的 rank-IC 衰减；第三项对评估半段的高换手进行标准化惩罚。该目标的核心含义是：一个可接受的参数配置，不是让后半段收益“偶然最高”，而是让前半段较优的候选在后半段依然大体保持原有排序，并避免只靠高换手换来短暂得分。
+
+实现上，本文并未在十多个连续参数维度上做全局联合优化。滚动元验证实际采用稀疏离散搜索与局部 refinement：先在 `26` 组 coarse 配置中筛选，再对 shortlist 做 `105` 组局部 refinement。该协议的作用不是将元验证塑造成高维最优控制问题，而是在可计算约束下完成尽量克制的参数校准。后续 `35/35` 组敏感性扰动也不用于证明存在唯一最佳点，而是用于检验正文结论是否落在较宽的参数盆地内。
+
+除了参数校准，本文还在每个宇宙上实施条件 MCS 代理。具体做法是：先用正文协议把巨大候选池截断到 top-10 shortlist，再用这些候选的前向滚动日收益损失序列 $L_t=-r_t$ 构造 20 日 block bootstrap 的集合检验：
+
+$$
+\mathcal{M}^{\star}=\left\{c\in \mathcal{C}_{10}:\text{在 block bootstrap 检验下无法被剔除}\right\}.
+\tag{5}
+$$
+
+需要强调的是，这里的 MCS 属于启发式两步重抽样代理，而不是严格意义上的筛选后推断。由于全局符号空间极大且候选高度同源，直接在全空间上实施经典 MCS 在计算上并不可行。本文的做法是先通过稳定性协议降维，再在截断后的精英集合上进行条件检验，以回答一个更现实的问题：在一簇已经相当接近的优质候选中，典型信号是否至少处于“无法被剔除”的范围内。
+
+## 4. 数据、实验设计与评价指标
+
+真实金融实验使用美国股票横截面数据，并构建 `liquid500` 与 `liquid1000` 两个投资宇宙。底层数据来自 WRDS 风格的 CRSP、Compustat、CCM 以及 CRSP 退市收益文件。样本首先按普通股与主板交易所语义筛选，仅保留美国普通股主板股票，再施加 `min_price=5`、过去 20 日平均成交额不少于 `100` 万美元、历史长度不少于 `60` 日、当日横截面不少于 `50` 只股票等约束。`liquid500` 与 `liquid1000` 则按训练期平均 `DOLLAR_VOLUME_20` 排名前 `500/1000` 构建。这样的定义保证了两个宇宙并不是临时按结果挑选出来的，而是在训练期就固定好可交易范围。
+
+样本区间被固定划分为训练期 `2010-01-04` 至 `2014-12-31`、验证期 `2015-01-02` 至 `2018-12-31` 和测试期 `2019-01-02` 至 `2025-12-30`。正文主结果全部严格只在测试期上汇报，以避免把验证期表现混入样本外证据链。收益评估显式并入退市收益，目标收益按 $(1+\mathrm{ret})(1+\mathrm{dlret})-1$ 构造。对于所有源自 Compustat 的基本面特征，本文施加 point-in-time 约束：季度变量优先按 `RDQ` 生效，`RDQ` 缺失时用 `datadate+45` 天替代；年度变量统一施加 `90` 天滞后；随后通过 `merge_asof(..., direction="backward")` 将财务数据映射到交易日面板，确保截面在任一日期只暴露当时已知的财务信息。
+
+投资组合构造采用日频横截面排序。对每个候选信号，本文在每日横截面上构建做多排名前 `20%`、做空排名后 `20%` 的多空组合，并在组内分别计算等权与市值加权结果。考虑到稀疏表达式可能只在极少数股票上非空，本文统一加入覆盖度熔断：仅当某日多头端和空头端都至少有 `5` 只股票时，才允许建仓；否则该日组合收益记为 `0`。这一规则同时适用于正文主方法和所有基线，以确保所有比较都建立在同口径的可交易约束下，而不是让某些异常解在极低覆盖率条件下偷偷退化为单边或极少数股票组合。
+
+评价指标分为四组。第一组是横截面排序指标，包括日均 rank-IC、分片 rank-IC 及其波动。第二组是组合收益指标，包括 Gross/Net Sharpe、年化收益、最大回撤和换手。第三组是风险调整指标，对测试期日收益序列进行 HAC 调整的 Newey-West $t$ 统计量，并以 Fama-French 五因子时间序列回归计算年化 alpha 与相应 $t$ 值。这里的 FF5 alpha 统一基于上述日频多空组合收益序列估计，而不是基于 Fama-MacBeth 截面回归。第四组是覆盖度与稀疏性指标，包括非空覆盖率、可交易日占比、中位有效股票数以及收益是否集中于极少数日期等，用于识别那些看似高 Sharpe、实际上根本不满足同口径建仓条件的伪赢家。
+
+公开 benchmark 部分采用 Feynman-style 与 SRBench 风格任务，并在其基础上扩展出 `adversarial_support_lockin` 与 `support_lockin_recovery` 等失效边界任务[21-22]。比较对象包括正文主方法 `legacy_linear_selector`、`naive rank-IC`、LASSO、SHAP、PySR 以及若干稳健性替代方案。对于 PySR，本文严格对齐基础特征与算子库，禁用 `sin/cos/exp` 等会明显放大搜索空间的默认非线性算子；其失败因此更应被解释为默认均方误差目标与横截面排序任务之间的目标错位，而不是单纯由搜索空间不公平导致的结果。对于 SHAP，本文使用 `ExtraTreesRegressor + TreeExplainer` 作为可复现代理基线[17-18]。
+
+## 5. 实证结果
+
+### 5.1 主信号表现与显著性
+
+两个股票宇宙最终都保留了同一条典型信号：`F* = CASH_RATIO_Q RANK PROFITABILITY_Q RANK ADD`。如果只观测等权口径，`liquid500` 与 `liquid1000` 的纯测试期 Gross Sharpe 分别为 `0.3975` 与 `0.5764`，统计显著性较为温和。但这并不妨碍该信号呈现清晰的经济学内容。更有解释力的事实是，在更加接近大资金可执行条件的市值加权口径下，信号表现反而明显改善：`liquid500` 的 VW Gross/Net Sharpe 为 `0.7829/0.7216`，`liquid1000` 为 `0.7955/0.7338`。即使将等权双边成本提高到 `100` bps，净 Sharpe 仍为 `0.1470` 与 `0.2958`。这说明 `F*` 并不依赖微盘尾部股票支撑，而更像一类在大市值公司上定价更稳定、交易摩擦更低的防御型质量结构。
+
+`F*` 的经济含义也与这一结果一致。`CASH_RATIO_Q` 与 `PROFITABILITY_Q` 同时刻画企业的流动性缓冲与盈利质量。对于商业模式成熟、融资渠道稳定的大盘公司，高现金与高盈利更容易对应稳健经营、较低尾部融资压力和更强抗冲击能力，因此其排名叠加更可能形成一种可交易的防御型质量溢价。相反，若在微盘股上观察到类似结构，现金高企和盈利较好并不必然意味着“优质防御”，也可能只是增长期权收缩、投资停滞或融资摩擦加剧的结果。这一逻辑正是后文双重排序中“小盘组 alpha 转弱甚至转负”的经济学来源。
+
+**表1  美国股票横截面典型信号主结果（纯测试期，且执行覆盖度熔断）**
+
+| 宇宙 | 信号 | EW Gross Sharpe | EW Net Sharpe (15bps) | EW NW t | EW FF5 α（年化%） | EW FF5 α t | VW Gross Sharpe | VW Net Sharpe (15bps) | VW FF5 α（年化%） | VW FF5 α t | EW Net Sharpe (100bps) | 覆盖率 | 换手 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| liquid500 | `F*` | 0.3975 | 0.3599 | 0.1492 | 0.87 | 0.3086 | 0.7829 | 0.7216 | 4.73 | 1.5491 | 0.1470 | 0.9932 | 0.0081 |
+| liquid1000 | `F*` | 0.5764 | 0.5343 | 0.5547 | 1.81 | 0.7127 | 0.7955 | 0.7338 | 4.51 | 1.5427 | 0.2958 | 0.9957 | 0.0082 |
+
+如果把信号与公司规模结合起来看，交易可行性与经济机制会更加清楚。按规模和信号强度做双重排序后，市值加权优势主要集中在中大盘组合。`liquid500` 中，VW 净 Sharpe 从 `Small/Mid/Large` 组的 `0.3813/0.3875/0.6855` 逐步抬升；`liquid1000` 中，这一模式更明显，对应数值为 `0.0347/0.7179/0.7221`。同样地，五因子调整后的年化 alpha 也从小盘组的弱甚至为负，提升到大盘组的明显正值。这说明 `F*` 并非通过微盘流动性幻觉制造收益，而是在大市值公司中更稳定地映射为一种防御型质量结构。
+
+**表2  基于公司规模与信号强度的双重排序结果（15bps 净口径）**
+
+| 宇宙 | 权重 | Small | Mid | Large |
+| --- | --- | --- | --- | --- |
+| liquid500 | VW N.Sharpe | 0.3813 | 0.3875 | 0.6855 |
+| liquid500 | VW Net FF5 α（年化%） | 0.28 | -0.23 | 2.73 |
+| liquid500 | VW Net FF5 α t | 0.0966 | -0.1083 | 1.0972 |
+| liquid1000 | VW N.Sharpe | 0.0347 | 0.7179 | 0.7221 |
+| liquid1000 | VW Net FF5 α（年化%） | -2.49 | 2.02 | 2.58 |
+| liquid1000 | VW Net FF5 α t | -1.1103 | 0.9112 | 1.0949 |
+
+【插入图6：主信号与典型伪赢家的前向滚动表现对比】
+图文件：/Users/xieshangchen/Documents/New project/docs/figures/chinese_report_figure_6_cumulative_return.png
+
+条件状态检验提供了进一步但更克制的支持。本文不再采用事后挑选的危机日期，而是使用事前可观测的 VIX 指标：对每个测试日，先根据此前 `252` 个交易日的 VIX 历史分布计算 `80%` 分位阈值，再将当日划分为高压力状态或平稳状态。在这一规则下，`F*` 在高 VIX 状态下的点估计明显更强：`liquid500` 的 EW/VW Sharpe 为 `1.0031/1.2042`，平稳期仅为 `0.2191/0.6596`；`liquid1000` 的 EW/VW Sharpe 为 `1.2767/1.3233`，平稳期为 `0.3681/0.6358`。对应的条件回归设定为
+
+$$
+R_{F^*,t}=\alpha_0+\alpha_{\text{crisis}}\mathbb{I}_{\text{HighVIX},t}+\varepsilon_t,
+\tag{7}
+$$
+
+其中 $\alpha_{\text{crisis}}$ 统一转化为年化百分比口径。HAC 回归显示，高压力虚拟变量的年化系数在两个宇宙上均为正，但统计显著性温和：`liquid500` 的 VW 系数为 `0.0887`、`t=0.9198`，`liquid1000` 为 `0.1033`、`t=1.1058`。因此，本文更愿意将其解释为“在高压力环境下点估计更强的防御型结构”，而不是夸大为“显著的危机保险信号”。
+
+### 5.2 伪赢家过滤与稀疏异常解
+
+本文最有力的证据来自对伪赢家的剖解。不同基线会失败，但失败的形式并不相同。`liquid500` 上，SHAP 与 LASSO 更容易退化到 `cash-only` 或其高度同源的简式近邻。它们在纯测试期上未必立刻出现灾难性负收益，但对应的 rank-IC 更低，说明这种简化会损失跨时间排序信息。`liquid1000` 上，SHAP 同样退化到 `F_{cash}`；PySR 则在默认均方误差目标下退化到 `VOLATILITY_20 RANK NEG` 并给出负 Sharpe；而 `naive rank-IC` 与验证均值规则更容易选出一个表面上分数极高、实际上根本不满足可交易条件的稀疏异常解。
+
+这种差异恰好说明本文所界定的“伪赢家”并不是单一对象。一类伪赢家是覆盖率近乎为零、只能由极少数日期和极少数股票支撑的异常表达式；另一类伪赢家是近邻簇内部过度简化的单项结构，它们表面上保留了部分经济含义，却在跨时间与跨状态检验中损失了排序稳定性。就防过拟合而言，两类失败都重要，但前者更具有视觉冲击，因为它们最容易制造不真实的高 Sharpe 幻觉。
+
+在统一熔断规则下，这种幻觉会被直接击穿。`liquid1000` 上那个由 `naive rank-IC` 与验证均值规则挑出的 `LEVERAGE_Q CASH_RATIO_Q ADD PROFITABILITY_A CORR_5`，非空覆盖率只有 `0.000253`，每日中位有效股票数仅 `1`，可交易日占比在熔断后直接降为 `0`。这意味着它之所以曾经呈现出较高分数，并不是因为它真的构成了一条可执行的多空组合，而是因为旧口径允许异常低覆盖率样本在极少数日期上放大组合收益。将这一悖论显式暴露出来，正是本文主方法的核心价值之一。
+
+**表3  纯测试期上的典型伪赢家与近邻退化结构**
+
+| 宇宙 | 来源 | 候选信号 | 熔断后 Test Sharpe | Test Rank-IC | 覆盖率 | 可交易日占比 | 中位有效股票数 | 解释 |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| liquid500 | SHAP | `F_cash` | 0.4927 | 0.0004 | 1.0000 | 1.0000 | 277 | 近邻简化 |
+| liquid500 | LASSO | `PROFITABILITY_Q CASH_RATIO_Q RANK ADD` | 0.4582 | 0.0002 | 0.9932 | 1.0000 | 275 | 近邻简化 |
+| liquid500 | naive / 验证均值 | `PROFITABILITY_Q ... CORR_5 ADD` | 0.2239 | -0.0180 | 0.0633 | 0.2604 | 8 | 稀疏退化 |
+| liquid1000 | SHAP | `F_cash` | 0.5296 | 0.0008 | 1.0000 | 1.0000 | 484 | 近邻简化 |
+| liquid1000 | PySR | `VOLATILITY_20 RANK NEG` | -0.4427 | 0.0080 | 1.0000 | 1.0000 | 484 | 目标错位 |
+| liquid1000 | naive / 验证均值 | `LEVERAGE_Q ... CORR_5` | — | — | 0.000253 | 0.0000 | 1 | 熔断后不可交易 |
+
+### 5.3 近邻簇、MCS 代理与参数盆地
+
+近邻诊断解释了为什么简单筛选容易退化。`F*` 与 `F_{cash}` 的记号重叠度为 `0.4000`，信号相关性为 `0.7785`，说明它们并不是两个完全无关的对象，而是同一结构簇中的紧邻成员。对于这类近邻簇，若选择器只盯住单次验证得分，极易在结构上向更简单、但稳定性更差的单项表达式滑落。换言之，许多“新发现”并非真正的新经济结构，而只是已有结构簇中的局部偏移。
+
+MCS 代理与参数盆地则从另外两个角度约束这一问题。在 top-10 shortlist 上，`liquid500` 的 MCS 集大小为 `5`，`liquid1000` 为 `3`，`F*` 在两个宇宙中都位于 MCS 集内。这意味着正文并未把它包装成唯一真赢家，而是承认它只是精英近邻簇中无法被剔除的一员。参数实验也支持同样的结论：滚动元验证在两个宇宙上都回到 `F*`，`35/35` 组阈值扰动没有推翻主信号。这些结果共同说明，本文的主张不是“找到了唯一最优点”，而是“存在一块较宽的稳定区域，其输出会一致地排除最危险的伪赢家”。
+
+### 5.4 公开 benchmark 与稳健性检验
+
+公开 benchmark 更适合被解释为“准确率—稳定性权衡”，而不是简单追求 headline accuracy 第一。正文主方法 `legacy_linear_selector` 的平均准确率为 `0.9167`、稳定性为 `1.0000`；`naive rank-IC` 的平均准确率更高，为 `0.9333`，但稳定性下降到 `0.9500`。从这个意义上说，benchmark 并没有给出一个单向度的胜负结论，而是提示研究者：若把稳定性与可复现性也视为目标，单纯的平均准确率并不足以决定方法优劣。
+
+作为额外稳健性检验，本文还测试了连续目标的多目标优化替代方案，但该版本在金融任务上出现前沿拥挤，在公开 benchmark 上平均准确率仅为 `0.8333`，因此不纳入正文主方法定义。`adversarial_support_lockin` 与 `support_lockin_recovery` 两类任务共同界定了失效边界：即便在稳定性优先的协议下，若错误结构长期占据支持度，选择器仍可能被锁定。对这类边界保持诚实，是本文“防伪赢家”立场的一部分。
+
+【插入图4：benchmark 的准确率—稳定性 Pareto 分布】
+图文件：/Users/xieshangchen/Documents/New project/docs/figures/chinese_report_figure_4_benchmark_accuracy.png
+【插入图5：近邻信号案例】
+图文件：/Users/xieshangchen/Documents/New project/docs/figures/chinese_report_figure_5_selector_case_study.png
+
+## 6. 结论
+
+本文的核心发现是：在低信噪比、近邻公式高度同源且搜索对随机种子敏感的符号空间中，选择阶段本身就是主要误差来源。与继续扩大表达式空间相比，构造一套能抑制伪赢家、显式暴露稀疏异常解并在跨时间和跨种子上保持基本一致的选择协议，更能决定最终研究结论是否可信。本文提出的两阶段稳定性协议，正是沿着这一思路构建的工程化但可审查的方法框架。
+
+从真实金融结果看，`F*` 的意义在于稳健。无论是无条件 alpha，还是基于 VIX 的条件 alpha，本文都没有得到支持“新定价结构”的强统计结论。相反，真正有说服力的证据来自三个方面：第一，主信号在纯测试期、统一熔断、退市收益并入和市值加权口径下依然保留正向表现；第二，双重排序说明其经济内容主要由中大盘防御型质量结构承载，而不是微盘尾部噪声；第三，多个表面上更高分的候选在统一口径下要么退化成近邻简化，要么直接失去可交易性。本文两阶段协议的核心价值，在于提供一套减方差与安全切断机制：当横截面中只剩微弱信号和大量噪声时，系统会拒绝追逐最危险的伪赢家，并保守地收敛到具有基本经济学合理性和交易可行性的结构。
+
+从更广的研究含义看，这一结果也提示后续工作应把重心放在更严格的数据约束、更透明的样本外协议以及更审慎的经济机制识别上，而不是继续依赖更大的搜索空间去追逐脆弱且不可复现的局部最优。
+
+## 参考文献
+
+1. Zhu, Z., & Zhu, K. *AlphaQCM: Alpha Discovery in Finance with Distributional Reinforcement Learning*.
+2. Yang, H., Hao, D., Wang, Z., Shi, Q., & Li, X. *Alpha Discovery via Grammar-Guided Learning and Search*.
+3. Wang, Y., Xu, J., Zhang, H., Huang, S.-L., Sun, D. D., & Zhang, X.-P. *FactorMiner: A Self-Evolving Agent with Skills and Experience Memory for Financial Alpha Discovery*.
+4. *AlphaFormer: End-to-End Symbolic Regression of Alpha Signals with Transformers*.
+5. *Generating Synergistic Formulaic Alpha Collections via Reinforcement Learning*.
+6. Gu, S., Kelly, B., & Xiu, D. (2020). *Empirical Asset Pricing via Machine Learning*. Review of Financial Studies.
+7. Giglio, S., Kelly, B., & Xiu, D. (2022). *Factor Models, Machine Learning, and Asset Pricing*. Annual Review of Financial Economics.
+8. Giglio, S., Liao, Y., & Xiu, D. (2021). *Thousands of Alpha Tests*. Review of Financial Studies.
+9. Harvey, C. R., Liu, Y., & Zhu, H. (2016). *... and the Cross-Section of Expected Returns*. Review of Financial Studies.
+10. White, H. (2000). *A Reality Check for Data Snooping*. Econometrica.
+11. Meinshausen, N., & Bühlmann, P. (2010). *Stability Selection*. Journal of the Royal Statistical Society: Series B.
+12. Hansen, P. R., Lunde, A., & Nason, J. M. (2011). *The Model Confidence Set*. Econometrica.
+13. Romano, J. P., & Wolf, M. (2005). *Exact and Approximate Stepdown Methods for Multiple Hypothesis Testing*. Journal of the American Statistical Association.
+14. Benjamini, Y., & Hochberg, Y. (1995). *Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing*. Journal of the Royal Statistical Society: Series B.
+15. Benjamini, Y., & Yekutieli, D. (2001). *The Control of the False Discovery Rate in Multiple Testing under Dependency*. Annals of Statistics.
+16. Breiman, L. (1996). *Bagging Predictors*. Machine Learning.
+17. Lundberg, S. M., & Lee, S.-I. (2017). *A Unified Approach to Interpreting Model Predictions*. Advances in Neural Information Processing Systems.
+18. Cranmer, M. (2023). *Interpretable Machine Learning for Science with PySR and SymbolicRegression.jl*. Journal of Open Source Software.
+19. Belloni, A., Chernozhukov, V., & Hansen, C. (2014). *Inference on Treatment Effects after Selection among High-Dimensional Controls*. Review of Economic Studies.
+20. Lee, J. D., Sun, D. L., Sun, Y., & Taylor, J. E. (2016). *Exact Post-Selection Inference, with Application to the Lasso*. Annals of Statistics.
+21. Udrescu, S.-M., & Tegmark, M. (2020). *AI Feynman: A Physics-Inspired Method for Symbolic Regression*. Science Advances.
+22. La Cava, W., Singh, T. R., Taggart, J., Suri, H., et al. (2021). *Contemporary Symbolic Regression Methods and Their Relative Performance*. NeurIPS Datasets and Benchmarks.

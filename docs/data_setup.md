@@ -8,6 +8,7 @@ The canonical mainline uses the `us_equities` layout only.
 data/raw/us_equities/
 ├── wrds/
 │   ├── crsp_daily.csv.gz
+│   ├── crsp_delisting.csv.gz
 │   ├── crsp_names.csv.gz
 │   ├── ccm_link.csv.gz
 │   ├── compustat_quarterly.csv.gz
@@ -57,6 +58,7 @@ python scripts/export_wrds_us_equities.py
 Minimum WRDS datasets:
 
 - `crsp_daily`
+- `crsp_delisting`
 - `crsp_names`
 - `ccm_link`
 - `compustat_quarterly`

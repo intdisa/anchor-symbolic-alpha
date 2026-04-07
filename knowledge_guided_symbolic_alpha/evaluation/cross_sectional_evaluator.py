@@ -138,7 +138,7 @@ class CrossSectionalFormulaEvaluator:
             index=left.index,
         )
         corr = (
-            frame.groupby("group", sort=False)
+            frame.groupby("group", sort=False)[["left", "right"]]
             .apply(lambda item: item["left"].rolling(window=5, min_periods=5).corr(item["right"]))
             .reset_index(level=0, drop=True)
         )

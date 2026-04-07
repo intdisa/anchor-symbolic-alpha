@@ -10,6 +10,7 @@ from .task_protocol import (
     BenchmarkTaskResult,
     SelectorBenchmarkTask,
     run_task_benchmark,
+    suite_stress_summary,
     suite_leaderboard,
 )
 
@@ -24,6 +25,7 @@ __all__ = [
     "naive_rank_ic_selection",
     "public_symbolic_task_specs",
     "run_task_benchmark",
+    "suite_stress_summary",
     "suite_leaderboard",
     "synthetic_selector_scenarios",
 ]

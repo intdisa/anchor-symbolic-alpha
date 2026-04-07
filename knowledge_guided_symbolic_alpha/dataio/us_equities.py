@@ -15,6 +15,10 @@ WRDS_REQUIRED_DATASETS = (
     "compustat_annual",
 )
 
+WRDS_OPTIONAL_DATASETS = (
+    "crsp_delisting",
+)
+
 PUBLIC_REQUIRED_DATASETS = (
     "fama_french_daily",
     "fred_macro_daily",
@@ -57,7 +61,8 @@ def load_us_equities_config(path: str | Path) -> USEquitiesConfig:
     start_date = str(config["start_date"])
     end_date = str(config["end_date"])
     universe_name = str(config.get("universe_name", "us_equities"))
-    wrds_specs = tuple(_parse_wrds_spec(name, config["wrds"][name], start_date, end_date) for name in WRDS_REQUIRED_DATASETS)
+    spec_names = tuple(str(name) for name in config["wrds"].keys())
+    wrds_specs = tuple(_parse_wrds_spec(name, config["wrds"][name], start_date, end_date) for name in spec_names)
     public_series = {str(name): dict(spec) for name, spec in config.get("public_sources", {}).items()}
     return USEquitiesConfig(
         output_root=output_root,
@@ -122,8 +127,10 @@ def default_output_paths(config: USEquitiesConfig) -> dict[str, Path]:
 def validate_us_equities_layout(root: str | Path) -> dict[str, list[str]]:
     root_path = Path(root)
     missing_wrds = [name for name in WRDS_REQUIRED_DATASETS if not any(root_path.glob(f"wrds/{name}.*"))]
+    missing_optional_wrds = [name for name in WRDS_OPTIONAL_DATASETS if not any(root_path.glob(f"wrds/{name}.*"))]
     missing_public = [name for name in PUBLIC_REQUIRED_DATASETS if not any(root_path.glob(f"public/{name}.*"))]
     return {
         "missing_wrds": missing_wrds,
+        "missing_optional_wrds": missing_optional_wrds,
         "missing_public": missing_public,
     }
